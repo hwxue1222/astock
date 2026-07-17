@@ -1,0 +1,383 @@
+import { Router, type Request, type Response } from 'express'
+import { getMockEvents, getMockFields, getMockUniverse } from '../domain/mockData.js'
+import { buildRatiosResponse } from '../domain/ratios.js'
+import { buildRiskSignals } from '../domain/riskEngine.js'
+import { eventRiskLevel } from '../domain/eventRisk.js'
+import {
+  getSinaSpotDataset,
+  pickMarketCapYuanFromDataset,
+} from '../providers/ashareSinaSpot.js'
+import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.js'
+import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
+import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
+import { getTencentKline } from '../providers/tencentKline.js'
+import { findSimilarStocks } from '../domain/similarity.js'
+
+const router = Router()
+
+function isMockMode(): boolean {
+  const v = process.env.MOCK_DATA
+  if (!v) return false
+  const s = String(v).toLowerCase()
+  return s === '1' || s === 'true' || s === 'yes'
+}
+
+function isRealDataRequired(): boolean {
+  const v = process.env.REAL_DATA_REQUIRED
+  if (!v) return true
+  const s = String(v).toLowerCase()
+  return s === '1' || s === 'true' || s === 'yes'
+}
+
+function normalizeAshareCode(symbol: string): string {
+  const raw = String(symbol ?? '').trim().toUpperCase()
+  if (!raw) return ''
+  const m = raw.match(/(\d{6})/)
+  return m ? m[1] : raw
+}
+
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  try {
+    return JSON.stringify(e)
+  } catch {
+    return String(e)
+  }
+}
+
+router.get('/universe', async (req: Request, res: Response): Promise<void> => {
+  if (isMockMode() && !isRealDataRequired()) {
+    res.status(200).json({ success: true, stocks: getMockUniverse(), meta: { source: 'mock' } })
+    return
+  }
+
+  {
+    const ds = await getSinaSpotDataset({ ttlSeconds: 6 * 3600 })
+    const items = (ds?.items ?? [])
+      .map((r) => ({
+        symbol: String(r.code ?? '').trim(),
+        name: String(r.name ?? '').trim(),
+        exchange: String(r.symbol ?? '').slice(0, 2).toUpperCase() || undefined,
+      }))
+      .filter((s) => s.symbol && s.name)
+
+    if (items.length) {
+      res.status(200).json({
+        success: true,
+        stocks: items,
+        meta: { source: 'sina_spot_cache' },
+      })
+      return
+    }
+  }
+
+  res.status(502).json({
+    success: false,
+    error: 'Universe provider unavailable (real data required)',
+  })
+})
+
+router.get(
+  '/:symbol/events',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const days = Number(req.query.days ?? 90)
+    const typeRaw = req.query.type
+    const type = Array.isArray(typeRaw)
+      ? typeRaw.map(String)
+      : typeRaw
+        ? String(typeRaw).split(',').map((s) => s.trim())
+        : []
+
+    const code = normalizeAshareCode(symbol)
+
+    if (isMockMode() && !isRealDataRequired()) {
+      const all = getMockEvents(symbol)
+      const from = new Date()
+      from.setUTCDate(from.getUTCDate() - (Number.isFinite(days) ? days : 90))
+      const filtered = all.filter((e) => new Date(e.publishedAt) >= from)
+      const byType = type.length
+        ? filtered.filter((e) => type.includes(e.eventType))
+        : filtered
+
+      res.status(200).json({ success: true, symbol, events: byType, meta: { source: 'mock' } })
+      return
+    }
+
+    let events: Awaited<ReturnType<typeof getEastmoneyAnnouncements>>
+    try {
+      events = await getEastmoneyAnnouncements({ code, pageSize: 30 })
+    } catch (e: unknown) {
+      void e
+      res.status(502).json({
+        success: false,
+        error: 'Events provider unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+      return
+    }
+
+    const from = new Date()
+    from.setUTCDate(from.getUTCDate() - (Number.isFinite(days) ? days : 90))
+    const filtered = events
+      .filter((e) => new Date(e.publishedAt) >= from)
+      .map((e) => ({ ...e, riskLevel: eventRiskLevel(e) }))
+    const byType = type.length
+      ? filtered.filter((e) => type.includes(e.eventType))
+      : filtered
+
+    res.status(200).json({
+      success: true,
+      symbol: code,
+      events: byType,
+      meta: {
+        source: 'eastmoney_notice',
+      },
+    })
+  },
+)
+
+router.get(
+  '/:symbol/ratios',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const asOf = req.query.asOf === 'previous' ? 'previous' : 'latest'
+
+    if (isMockMode() && !isRealDataRequired()) {
+      const fields = getMockFields(symbol, asOf)
+      const payload = buildRatiosResponse({
+        symbol,
+        asOf,
+        asOfDate: fields.asOfDate,
+        fields: {
+          netAssets: fields.netAssets,
+          totalAssets: fields.totalAssets,
+          revenue: fields.revenue,
+          cash: fields.cash,
+          marketCap: fields.marketCap,
+        },
+      })
+      res.status(200).json({ success: true, ...payload, meta: { source: 'mock' } })
+      return
+    }
+
+    {
+      try {
+        const code = normalizeAshareCode(symbol)
+        const [fin, ds] = await Promise.all([
+          getEastmoneyFinancialSnapshot({ code, asOf }),
+          getSinaSpotDataset({ ttlSeconds: 6 * 3600 }),
+        ])
+
+        const marketCap = ds ? pickMarketCapYuanFromDataset(ds, code) : undefined
+        const totalAssets = fin.totalAssets
+        const totalLiabilities = fin.totalLiabilities
+        const netAssets =
+          typeof totalAssets === 'number' && typeof totalLiabilities === 'number'
+            ? totalAssets - totalLiabilities
+            : undefined
+
+        const payload = buildRatiosResponse({
+          symbol,
+          asOf,
+          asOfDate: fin.asOfDate,
+          fields: {
+            netAssets,
+            totalAssets,
+            revenue: fin.revenue,
+            cash: fin.cash,
+            marketCap,
+          },
+        })
+
+        res.status(200).json({
+          success: true,
+          ...payload,
+          meta: {
+            source: 'eastmoney_datacenter',
+          },
+        })
+        return
+      } catch (e: unknown) {
+        void e
+      }
+    }
+
+    res.status(502).json({
+      success: false,
+      error: 'Ratios provider unavailable (real data required)',
+    })
+  },
+)
+
+router.get(
+  '/:symbol/risk-signals',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const days = Number(req.query.days ?? 90)
+
+    if (isMockMode() && !isRealDataRequired()) {
+      const all = getMockEvents(symbol)
+      const from = new Date()
+      from.setUTCDate(from.getUTCDate() - (Number.isFinite(days) ? days : 90))
+      const filtered = all.filter((e) => new Date(e.publishedAt) >= from)
+      const payload = buildRiskSignals({ symbol, events: filtered })
+      res.status(200).json({ success: true, ...payload, meta: { source: 'mock' } })
+      return
+    }
+
+    const code = normalizeAshareCode(symbol)
+    let events: Awaited<ReturnType<typeof getEastmoneyAnnouncements>>
+    try {
+      events = await getEastmoneyAnnouncements({ code, pageSize: 30 })
+    } catch (e: unknown) {
+      void e
+      res.status(502).json({
+        success: false,
+        error: 'Events provider unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+      return
+    }
+
+    const from = new Date()
+    from.setUTCDate(from.getUTCDate() - (Number.isFinite(days) ? days : 90))
+    const filtered = events
+      .filter((e) => new Date(e.publishedAt) >= from)
+      .map((e) => ({ ...e, riskLevel: eventRiskLevel(e) }))
+    const payload = buildRiskSignals({ symbol: code, events: filtered })
+
+    res.status(200).json({
+      success: true,
+      ...payload,
+      meta: {
+        source: 'eastmoney_notice',
+      },
+    })
+  },
+)
+
+router.get(
+  '/:symbol/kline',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const code = normalizeAshareCode(symbol)
+    const kltRaw = String(req.query.klt ?? '101')
+    const fqtRaw = String(req.query.fqt ?? '1')
+    const limit = Number(req.query.limit ?? 200)
+
+    const klt = (kltRaw === '102' || kltRaw === '103' ? kltRaw : '101') as '101' | '102' | '103'
+    const fqt = (fqtRaw === '0' || fqtRaw === '2' ? fqtRaw : '1') as '0' | '1' | '2'
+
+    try {
+      const period = klt === '103' ? 'month' : klt === '102' ? 'week' : 'day'
+      const adjust = fqt === '1' ? 'qfq' : 'none'
+      const out = await getTencentKline({
+        code,
+        period,
+        adjust,
+        limit: Number.isFinite(limit) ? limit : 200,
+      })
+
+      if (!out.candles.length) {
+        const fallback = await getEastmoneyKline({
+          code,
+          klt,
+          fqt,
+          limit: Number.isFinite(limit) ? limit : 200,
+        })
+        res.status(200).json({
+          success: true,
+          symbol: code,
+          name: fallback.name,
+          klt,
+          fqt,
+          candles: fallback.candles,
+          meta: { source: fallback.source },
+        })
+        return
+      }
+
+      res.status(200).json({
+        success: true,
+        symbol: code,
+        name: undefined,
+        klt,
+        fqt,
+        candles: out.candles,
+        meta: { source: out.source },
+      })
+    } catch (e: unknown) {
+      res.status(502).json({
+        success: false,
+        error: 'Kline provider unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+    }
+  },
+)
+
+router.get(
+  '/:symbol/similar',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const code = normalizeAshareCode(symbol)
+    const days = Number(req.query.days ?? 160)
+    const top = Number(req.query.top ?? 10)
+    const klt = '101' as const
+    const fqt = '1' as const
+    const maxCandidates = Number(req.query.maxCandidates ?? 60)
+
+    const enabledRaw = String(req.query.enabled ?? '2')
+    const enabled = enabledRaw
+      .split(',')
+      .map((x) => Number(String(x).trim()))
+      .filter((x): x is 1 | 2 | 3 => x === 1 || x === 2 || x === 3)
+    const enabledUniq = Array.from(new Set(enabled))
+
+    const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
+    const s2LastDays = Number(req.query.s2LastDays ?? 5)
+    const s2TurnoverSpikeMultiple = Number(req.query.s2TurnoverSpikeMultiple ?? 2)
+    const s2PreselectTop = Number(req.query.s2PreselectTop ?? 30)
+    const s3LastDays = Number(req.query.s3LastDays ?? 5)
+    const s3RangeRatioMin = Number(req.query.s3RangeRatioMin ?? 0.5)
+    const s3RangeRatioMax = Number(req.query.s3RangeRatioMax ?? 2)
+
+    const candRaw = String(req.query.candidates ?? '').trim()
+    const candidates = candRaw
+      ? candRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined
+
+    try {
+      const out = await findSimilarStocks({
+        targetSymbol: code,
+        klt,
+        fqt,
+        days: Number.isFinite(days) ? days : 160,
+        top: Number.isFinite(top) ? top : 10,
+        candidateSymbols: candidates,
+        maxCandidates: Number.isFinite(maxCandidates) ? maxCandidates : 60,
+        enabled: enabledUniq.length ? enabledUniq : [2],
+        s1MaxMarketCapYi: Number.isFinite(s1MaxMarketCapYi) ? s1MaxMarketCapYi : 150,
+        s2LastDays: Number.isFinite(s2LastDays) ? s2LastDays : 5,
+        s2TurnoverSpikeMultiple: Number.isFinite(s2TurnoverSpikeMultiple) ? s2TurnoverSpikeMultiple : 2,
+        s2PreselectTop: Number.isFinite(s2PreselectTop) ? s2PreselectTop : 30,
+        s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
+        s3RangeRatioMin: Number.isFinite(s3RangeRatioMin) ? s3RangeRatioMin : 0.5,
+        s3RangeRatioMax: Number.isFinite(s3RangeRatioMax) ? s3RangeRatioMax : 2,
+      })
+      res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
+    } catch (e: unknown) {
+      res.status(502).json({
+        success: false,
+        error: 'Similar search unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+    }
+  },
+)
+
+export default router
