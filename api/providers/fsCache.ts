@@ -1,5 +1,15 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
+
+export function getCacheDir(): string {
+  const base = process.env.VERCEL ? path.join(os.tmpdir(), 'astock-cache') : path.join(process.cwd(), '.cache')
+  return base
+}
+
+export function cacheFilePath(fileName: string): string {
+  return path.join(getCacheDir(), fileName)
+}
 
 export async function readJsonCache<T>(
   filePath: string,
@@ -18,10 +28,13 @@ export async function readJsonCache<T>(
 }
 
 export async function writeJsonCache(filePath: string, data: unknown): Promise<void> {
-  const dir = path.dirname(filePath)
-  await fs.mkdir(dir, { recursive: true })
-  const tmp = `${filePath}.tmp`
-  await fs.writeFile(tmp, JSON.stringify(data))
-  await fs.rename(tmp, filePath)
+  try {
+    const dir = path.dirname(filePath)
+    await fs.mkdir(dir, { recursive: true })
+    const tmp = `${filePath}.tmp`
+    await fs.writeFile(tmp, JSON.stringify(data))
+    await fs.rename(tmp, filePath)
+  } catch {
+    return
+  }
 }
-
