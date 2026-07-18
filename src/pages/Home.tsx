@@ -106,41 +106,35 @@ export default function Home() {
             }}
           />
 
-          <div className="flex items-stretch gap-4 overflow-x-auto pb-2">
-            <div className="min-w-[360px] shrink-0 flex-1">
-              <SimilarStocksPanel
-                targetSymbol={standardSymbol ?? '002829'}
-                mode="kline"
-                klt={klineKlt}
-                fqt={klineFqt}
-                days={klineLimit}
-              />
-            </div>
-            <div className="min-w-[360px] shrink-0 flex-1">
-              <SymbolListCard
-                title="自选股"
-                symbols={watchlist}
-                universe={universe}
-                emptyText="添加自选以便快速跟踪"
-                addPlaceholder="输入6位股票代码"
-                onAdd={(s) => addToWatchlist(s)}
-                onRemove={(s) => toggleWatchlist(s)}
-                onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
-                showBasics
-              />
-            </div>
-            <div className="min-w-[360px] shrink-0 flex-1">
-              <SymbolListCard
-                title="黑名单"
-                symbols={blacklist}
-                universe={universe}
-                emptyText="添加黑名单以便在看板中对照"
-                addPlaceholder="输入6位股票代码"
-                onAdd={(s) => addToBlacklist(s)}
-                onRemove={(s) => toggleBlacklist(s)}
-                onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
-              />
-            </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <SimilarStocksPanel
+              targetSymbol={standardSymbol ?? '002829'}
+              mode="kline"
+              klt={klineKlt}
+              fqt={klineFqt}
+              days={klineLimit}
+            />
+            <SymbolListCard
+              title="自选股"
+              symbols={watchlist}
+              universe={universe}
+              emptyText="添加自选以便快速跟踪"
+              addPlaceholder="输入6位股票代码"
+              onAdd={(s) => addToWatchlist(s)}
+              onRemove={(s) => toggleWatchlist(s)}
+              onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+              showBasics
+            />
+            <SymbolListCard
+              title="黑名单"
+              symbols={blacklist}
+              universe={universe}
+              emptyText="添加黑名单以便在看板中对照"
+              addPlaceholder="输入6位股票代码"
+              onAdd={(s) => addToBlacklist(s)}
+              onRemove={(s) => toggleBlacklist(s)}
+              onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+            />
           </div>
         </div>
       </div>
