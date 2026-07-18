@@ -81,6 +81,8 @@ export interface KlineCandle {
   high: number
   low: number
   volume: number
+  amount?: number
+  turnover?: number
 }
 
 export interface StockKlineResponse {

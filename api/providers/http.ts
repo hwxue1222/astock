@@ -48,5 +48,20 @@ export async function fetchJson<T>(
   input?: { timeoutMs?: number; headers?: Record<string, string> },
 ): Promise<T> {
   const text = await fetchText(url, input)
-  return JSON.parse(text) as T
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    const s = String(text ?? '')
+    const firstObj = s.indexOf('{')
+    const lastObj = s.lastIndexOf('}')
+    if (firstObj >= 0 && lastObj > firstObj) {
+      return JSON.parse(s.slice(firstObj, lastObj + 1)) as T
+    }
+    const firstArr = s.indexOf('[')
+    const lastArr = s.lastIndexOf(']')
+    if (firstArr >= 0 && lastArr > firstArr) {
+      return JSON.parse(s.slice(firstArr, lastArr + 1)) as T
+    }
+    throw new Error('Invalid JSON response')
+  }
 }

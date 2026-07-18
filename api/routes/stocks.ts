@@ -355,31 +355,51 @@ router.get(
     try {
       const period = klt === '103' ? 'month' : klt === '102' ? 'week' : 'day'
       const adjust = fqt === '1' ? 'qfq' : 'none'
-      const out = await getTencentKline({
-        code,
-        period,
-        adjust,
-        limit: Number.isFinite(limit) ? limit : 200,
-      })
 
-      if (!out.candles.length) {
-        const fallback = await getEastmoneyKline({
-          code,
-          klt,
-          fqt,
-          limit: Number.isFinite(limit) ? limit : 200,
-        })
+      const lmt = Number.isFinite(limit) ? limit : 200
+      const [tencent, east] = await Promise.all([
+        getTencentKline({ code, period, adjust, limit: lmt }),
+        getEastmoneyKline({ code, klt, fqt, limit: lmt }).catch(() => null),
+      ])
+
+      if (!tencent.candles.length) {
+        if (east?.candles?.length) {
+          res.status(200).json({
+            success: true,
+            symbol: code,
+            name: east.name,
+            klt,
+            fqt,
+            candles: east.candles,
+            meta: { source: east.source },
+          })
+          return
+        }
         res.status(200).json({
           success: true,
           symbol: code,
-          name: fallback.name,
+          name: undefined,
           klt,
           fqt,
-          candles: fallback.candles,
-          meta: { source: fallback.source },
+          candles: [],
+          meta: { source: tencent.source },
         })
         return
       }
+
+      const emByTs = new Map<string, { amount?: number; turnover?: number }>()
+      for (const c of east?.candles ?? []) {
+        emByTs.set(c.ts, { amount: c.amount, turnover: c.turnover })
+      }
+
+      const candles = tencent.candles.map((c) => {
+        const extra = emByTs.get(c.ts)
+        return {
+          ...c,
+          amount: extra?.amount,
+          turnover: extra?.turnover,
+        }
+      })
 
       res.status(200).json({
         success: true,
@@ -387,8 +407,8 @@ router.get(
         name: undefined,
         klt,
         fqt,
-        candles: out.candles,
-        meta: { source: out.source },
+        candles,
+        meta: { source: east?.source ? `${tencent.source}+${east.source}` : tencent.source },
       })
     } catch (e: unknown) {
       res.status(502).json({

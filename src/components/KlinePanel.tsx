@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import KlineChart from '@/components/KlineChart'
-import { formatIsoToLocal } from '@/lib/format'
+import { formatIsoToLocal, formatYiFromYuan } from '@/lib/format'
 import { getKline } from '@/lib/stockApi'
 import type { KlineFqt, KlineKlt, StockKlineResponse } from '@/types/stock'
+
+function formatTurnover(turnover: number | undefined): string {
+  if (turnover === undefined) return '—'
+  if (!Number.isFinite(turnover)) return '—'
+  return `${turnover.toFixed(2)}%`
+}
 
 function periodLabel(klt: KlineKlt): string {
   if (klt === '102') return '周线'
@@ -122,6 +128,12 @@ export default function KlinePanel(props: {
                   </span>
                 </div>
                 <div>
+                  换手率：<span className="text-slate-200">{formatTurnover(latest.last.turnover)}</span>
+                </div>
+                <div>
+                  成交额：<span className="text-slate-200">{formatYiFromYuan(latest.last.amount)}</span>
+                </div>
+                <div>
                   日期：<span className="text-slate-200">{formatIsoToLocal(`${latest.last.ts}T00:00:00Z`)}</span>
                 </div>
               </div>
@@ -134,4 +146,3 @@ export default function KlinePanel(props: {
     </div>
   )
 }
-
