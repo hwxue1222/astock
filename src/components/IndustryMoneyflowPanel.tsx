@@ -20,6 +20,8 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'all' | 'pos' | 'neg'>('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
   useEffect(() => {
     const ac = new AbortController()
@@ -42,15 +44,29 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
     return () => ac.abort()
   }, [])
 
-  const rows = useMemo(() => {
+  const filtered = useMemo(() => {
     const xs =
       mode === 'pos'
         ? items.filter((x) => x.netInflowRate >= 0)
         : mode === 'neg'
           ? items.filter((x) => x.netInflowRate < 0)
           : items
-    return xs.slice(0, 30)
+    return xs
   }, [items, mode])
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filtered.length / pageSize))
+  }, [filtered.length])
+
+  const rows = useMemo(() => {
+    const p = Math.max(1, Math.min(totalPages, page))
+    const start = (p - 1) * pageSize
+    return filtered.slice(start, start + pageSize)
+  }, [filtered, page, totalPages])
+
+  useEffect(() => {
+    setPage(1)
+  }, [mode])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -97,6 +113,38 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
           >
             仅负
           </button>
+
+          <div className="ml-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className={cn(
+                'rounded-lg border px-2 py-1 text-xs font-semibold',
+                page <= 1
+                  ? 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+              )}
+            >
+              上一页
+            </button>
+            <div className="text-xs text-slate-500">
+              {Math.min(totalPages, Math.max(1, page))}/{totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className={cn(
+                'rounded-lg border px-2 py-1 text-xs font-semibold',
+                page >= totalPages
+                  ? 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600'
+                  : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+              )}
+            >
+              下一页
+            </button>
+          </div>
         </div>
       </div>
 
