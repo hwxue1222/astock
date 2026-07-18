@@ -56,9 +56,8 @@ export default function SimilarStocksPanel(props: {
         s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
         s2LastDays: standards.s2.lastDays,
         s2MinSimilarity: standards.s2.minSimilarity,
-        s3LastDays: standards.s3.lastDays,
-        s3RangeRatioMin: standards.s3.rangeRatioMin,
-        s3RangeRatioMax: standards.s3.rangeRatioMax,
+        s3ChangePct: standards.s3.changePct,
+        s3VolumeMultiple: standards.s3.volumeMultiple,
       },
       ac.signal,
     )
@@ -177,32 +176,24 @@ export default function SimilarStocksPanel(props: {
             />
             标准3
           </label>
-          <div className="text-xs text-slate-400">近</div>
+          <div className="text-xs text-slate-400">最近1日涨跌幅 ≥</div>
           <input
             type="number"
-            value={standards.s3.lastDays}
-            min={3}
+            value={standards.s3.changePct}
+            min={0}
             max={30}
-            step={1}
-            onChange={(e) => setStandard('s3', { lastDays: Number(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+            step={0.01}
+            onChange={(e) => setStandard('s3', { changePct: Number(e.target.value) })}
+            className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">日波动比(候选/标准) ∈</div>
+          <div className="text-xs text-slate-400">% 且 成交量 ≥ 前一日 ×</div>
           <input
             type="number"
-            value={standards.s3.rangeRatioMin}
-            min={0.1}
+            value={standards.s3.volumeMultiple}
+            min={1}
+            max={10}
             step={0.1}
-            onChange={(e) => setStandard('s3', { rangeRatioMin: Number(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">~</div>
-          <input
-            type="number"
-            value={standards.s3.rangeRatioMax}
-            min={0.1}
-            step={0.1}
-            onChange={(e) => setStandard('s3', { rangeRatioMax: Number(e.target.value) })}
+            onChange={(e) => setStandard('s3', { volumeMultiple: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>

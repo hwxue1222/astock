@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
+const MAX_CACHE_AGE_SECONDS = 3 * 24 * 3600
+
 export async function readJsonCache<T>(
   filePath: string,
   input: { ttlSeconds: number },
@@ -9,6 +11,14 @@ export async function readJsonCache<T>(
   try {
     const st = await fs.stat(filePath)
     const ageSeconds = (Date.now() - st.mtimeMs) / 1000
+    if (ageSeconds > MAX_CACHE_AGE_SECONDS) {
+      try {
+        await fs.unlink(filePath)
+      } catch {
+        void 0
+      }
+      return null
+    }
     if (ageSeconds > input.ttlSeconds) return null
     const raw = await fs.readFile(filePath, 'utf-8')
     return JSON.parse(raw) as T
@@ -24,4 +34,3 @@ export async function writeJsonCache(filePath: string, data: unknown): Promise<v
   await fs.writeFile(tmp, JSON.stringify(data))
   await fs.rename(tmp, filePath)
 }
-

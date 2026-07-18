@@ -49,9 +49,8 @@ describe('findSimilarStocks', () => {
       s2LastDays: 5,
       s2TurnoverSpikeMultiple: 2,
       s2PreselectTop: 20,
-      s3LastDays: 5,
-      s3RangeRatioMin: 0.5,
-      s3RangeRatioMax: 2,
+      s3ChangePct: 9.98,
+      s3VolumeMultiple: 2,
     })
 
     expect(getSinaSpotDatasetMock).toHaveBeenCalledWith({

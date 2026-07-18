@@ -302,9 +302,8 @@ export async function findSimilarStocks(input: {
   s2TurnoverSpikeMultiple: number
   s2PreselectTop: number
   s2MinSimilarity?: number
-  s3LastDays: number
-  s3RangeRatioMin: number
-  s3RangeRatioMax: number
+  s3ChangePct?: number
+  s3VolumeMultiple?: number
 }): Promise<{ target: string; candidates: number; top: SimilarStock[]; meta: { window: number } }> {
   const target = normalizeAshareCode(input.targetSymbol)
   const top = Math.max(1, Math.min(50, input.top))
@@ -315,13 +314,12 @@ export async function findSimilarStocks(input: {
   const s2MinSimilarity = Math.max(0, Math.min(1, input.s2MinSimilarity ?? 0))
   void input.s2TurnoverSpikeMultiple
   void input.s2PreselectTop
-  const s3LastDays = Math.max(3, Math.min(30, input.s3LastDays))
-  const s3RangeRatioMin = Math.max(0.05, Math.min(10, input.s3RangeRatioMin))
-  const s3RangeRatioMax = Math.max(s3RangeRatioMin, Math.min(10, input.s3RangeRatioMax))
+  const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
+  const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const limit = enabled.has(2) || enabled.has(3) ? 20 : 0
-  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
+  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? 2 : 0
 
   const nameByCode = new Map<string, string>()
   const capYuanByCode = new Map<string, number>()
@@ -387,7 +385,7 @@ export async function findSimilarStocks(input: {
     : []
 
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
-  const targetRange = enabled.has(3) ? avgRangePct({ candles: targetCandles, lastDays: s3LastDays }) : null
+  void targetCandles
 
   const rows = await mapLimit(candidates, enabled.has(2) || enabled.has(3) ? 4 : 2, async (code) => {
     try {
@@ -400,11 +398,14 @@ export async function findSimilarStocks(input: {
         timeoutMs: 6_000,
         fallbackToTencent: false,
       })
-      if (enabled.has(3) && targetRange !== null) {
-        const r = avgRangePct({ candles, lastDays: s3LastDays })
-        if (r === null) return null
-        const ratio = r / Math.max(1e-9, targetRange)
-        if (!(ratio >= s3RangeRatioMin && ratio <= s3RangeRatioMax)) return null
+      if (enabled.has(3)) {
+        const xs = candles.slice(-2)
+        if (xs.length < 2) return null
+        const prev = xs[0]
+        const cur = xs[1]
+        const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
+        const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
+        if (!(changePctAbs >= s3ChangePct && volMultiple >= s3VolumeMultiple)) return null
       }
 
       if (enabled.has(2)) {
