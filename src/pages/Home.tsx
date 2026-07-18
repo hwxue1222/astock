@@ -33,16 +33,31 @@ export default function Home() {
 
   useEffect(() => {
     const ac = new AbortController()
-    setUniverseError(null)
-    getUniverse(ac.signal)
-      .then((stocks) => {
-        setUniverse(stocks)
-      })
-      .catch((e: unknown) => {
-        if (ac.signal.aborted) return
-        setUniverseError(e instanceof Error ? e.message : String(e))
-      })
-    return () => ac.abort()
+    let retryTimer: number | null = null
+
+    const run = (attempt: number) => {
+      setUniverseError(null)
+      getUniverse(ac.signal)
+        .then((stocks) => {
+          if (ac.signal.aborted) return
+          setUniverse(stocks)
+        })
+        .catch((e: unknown) => {
+          if (ac.signal.aborted) return
+          const msg = e instanceof Error ? e.message : String(e)
+          setUniverseError(msg)
+          if (attempt < 3) {
+            const delayMs = attempt === 1 ? 800 : attempt === 2 ? 2000 : 5000
+            retryTimer = window.setTimeout(() => run(attempt + 1), delayMs)
+          }
+        })
+    }
+
+    run(1)
+    return () => {
+      ac.abort()
+      if (retryTimer) window.clearTimeout(retryTimer)
+    }
   }, [])
 
   const updatedAt = useMemo(() => {
@@ -70,9 +85,7 @@ export default function Home() {
     return () => ac.abort()
   }, [])
 
-  const title = universeError
-    ? '股票风险分析看板（数据源异常）'
-    : '股票风险分析看板'
+  const title = universeError && universe.length === 0 ? '股票风险分析看板（搜索数据异常）' : '股票风险分析看板'
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
