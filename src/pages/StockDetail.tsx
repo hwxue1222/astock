@@ -7,7 +7,7 @@ import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
-import { getEvents, getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
+import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import type {
   MajorEvent,
@@ -43,6 +43,7 @@ export default function StockDetail() {
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
+  const [quoteName, setQuoteName] = useState<string | null>(null)
 
   const [events, setEvents] = useState<MajorEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -65,6 +66,15 @@ export default function StockDetail() {
       .catch(() => {})
     return () => ac.abort()
   }, [])
+
+  useEffect(() => {
+    if (!routeSymbol) return
+    const ac = new AbortController()
+    getQuote(routeSymbol, ac.signal)
+      .then((q) => setQuoteName(q.name ? String(q.name) : null))
+      .catch(() => setQuoteName(null))
+    return () => ac.abort()
+  }, [routeSymbol])
 
   useEffect(() => {
     if (!routeSymbol) return
@@ -150,6 +160,8 @@ export default function StockDetail() {
     return universe.find((s) => s.symbol.toUpperCase() === sym) ?? null
   }, [routeSymbol, universe])
 
+  const displayName = selectedMeta?.name ?? quoteName
+
   const title = `个股详情`
 
   const inWatchlist = useMemo(() => {
@@ -183,8 +195,8 @@ export default function StockDetail() {
             <div>
               <div className="text-lg font-semibold text-slate-100">
                 {routeSymbol}
-                {selectedMeta?.name ? (
-                  <span className="text-slate-400"> · {selectedMeta.name}</span>
+                {displayName ? (
+                  <span className="text-slate-400"> · {displayName}</span>
                 ) : null}
                 {selectedMeta?.exchange ? (
                   <span className="text-slate-500"> · {selectedMeta.exchange}</span>
