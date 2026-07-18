@@ -4,6 +4,7 @@ import SymbolListCard from '@/components/SymbolListCard'
 import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import IndustryMoneyflowPanel from '@/components/IndustryMoneyflowPanel'
+import MarketBreadthPanel from '@/components/MarketBreadthPanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
 import { getThsClassicStats, getUniverse } from '@/lib/stockApi'
@@ -107,6 +108,8 @@ export default function Home() {
                 .finally(() => setThsLoading(false))
             }}
           />
+
+          <MarketBreadthPanel />
 
           <IndustryMoneyflowPanel />
 

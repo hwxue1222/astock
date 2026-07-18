@@ -192,3 +192,16 @@ export type IndustryMoneyflowItem = {
 export interface IndustryMoneyflowResponse {
   items: IndustryMoneyflowItem[]
 }
+
+export interface MarketBreadthResponse {
+  asOfDate: string
+  total: number
+  up: number
+  down: number
+  flat: number
+  unknown: number
+  meta?: {
+    source?: string
+    ts?: number
+  }
+}

@@ -101,6 +101,55 @@ router.get('/moneyflow/industry', async (req: Request, res: Response): Promise<v
   }
 })
 
+router.get('/breadth', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const ds = await getSinaSpotDataset({ ttlSeconds: 6 * 3600 })
+    const items = ds?.items ?? []
+    let up = 0
+    let down = 0
+    let flat = 0
+    let unknown = 0
+    for (const it of items) {
+      const v = Number((it as { changepercent?: unknown }).changepercent)
+      if (!Number.isFinite(v)) {
+        unknown += 1
+        continue
+      }
+      if (v > 0) up += 1
+      else if (v < 0) down += 1
+      else flat += 1
+    }
+
+    const ts = typeof ds?.ts === 'number' ? ds.ts : Math.floor(Date.now() / 1000)
+    const shDate = new Date(ts * 1000)
+    const shWeekday = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', weekday: 'short' }).format(shDate)
+    const offsetDays = shWeekday === 'Sat' ? 1 : shWeekday === 'Sun' ? 2 : 0
+    const tradeDate = new Date(shDate.getTime() - offsetDays * 24 * 3600 * 1000)
+    const asOfDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(tradeDate)
+    res.status(200).json({
+      success: true,
+      asOfDate,
+      total: up + down + flat,
+      up,
+      down,
+      flat,
+      unknown,
+      meta: { source: 'sina_spot_cache', ts },
+    })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Market breadth unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
 router.get('/ths-classic', async (req: Request, res: Response): Promise<void> => {
   try {
     const out = await getThsClassicStats({ ttlSeconds: 5 * 60, timeoutMs: 12_000 })

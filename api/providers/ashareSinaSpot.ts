@@ -8,6 +8,7 @@ export interface SinaSpotRow {
   code?: string
   name?: string
   mktcap?: number
+  changepercent?: number
 }
 
 export interface SinaSpotDataset {
@@ -92,6 +93,7 @@ async function fetchFullDatasetFromNetwork(): Promise<SinaSpotDataset> {
         code,
         name: typeof row.name === 'string' ? row.name : undefined,
         mktcap: typeof row.mktcap === 'number' ? row.mktcap : undefined,
+        changepercent: typeof row.changepercent === 'number' ? row.changepercent : undefined,
       })
       newCount += 1
     }
@@ -116,8 +118,12 @@ export async function getSinaSpotDataset(input?: {
 
   const disk = await loadDatasetFromDisk()
   if (disk?.items?.length) {
-    mem = { loadedAtMs: Date.now(), dataset: disk }
-    return disk
+    const ts = typeof disk.ts === 'number' ? disk.ts : 0
+    const ageSeconds = ts > 0 ? Date.now() / 1000 - ts : Infinity
+    if (ageSeconds <= ttlSeconds) {
+      mem = { loadedAtMs: Date.now(), dataset: disk }
+      return disk
+    }
   }
 
   if (input?.preferNetwork === false) return null

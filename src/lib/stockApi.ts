@@ -2,6 +2,7 @@ import type {
   KlineFqt,
   KlineKlt,
   IndustryMoneyflowResponse,
+  MarketBreadthResponse,
   SimilarStocksResponse,
   MajorEvent,
   RiskSignalsResponse,
@@ -108,6 +109,11 @@ export async function getIndustryMoneyflow(
     `/api/stocks/moneyflow/industry?${q.toString()}`,
     signal,
   )
+  return data
+}
+
+export async function getMarketBreadth(signal?: AbortSignal): Promise<MarketBreadthResponse> {
+  const data = await fetchJson<{ success: boolean } & MarketBreadthResponse>('/api/stocks/breadth', signal)
   return data
 }
 
