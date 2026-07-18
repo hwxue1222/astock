@@ -17,11 +17,15 @@ export default function SimilarStocksPanel(props: {
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
   const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
+  const addToWatchlist = useStockStore((s) => s.addToWatchlist)
+  const watchlist = useStockStore((s) => s.watchlist)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
   const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
   const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
   const similarLast = useStockStore((s) => s.similarLast)
   const setSimilarLast = useStockStore((s) => s.setSimilarLast)
+
+  const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
 
   const [standardDraft, setStandardDraft] = useState<string>(() => String(standardSymbol ?? '').toUpperCase())
 
@@ -286,23 +290,36 @@ export default function SimilarStocksPanel(props: {
         ) : data?.top?.length ? (
           <div className="space-y-2">
             {data.top.map((it) => (
-              <button
+              <div
                 key={it.symbol}
-                type="button"
-                onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-left hover:bg-slate-900',
+                  'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2',
                 )}
               >
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
+                  className="min-w-0 flex-1 text-left hover:opacity-95"
+                >
                   <div className="truncate text-sm font-semibold text-slate-100">
                     {it.symbol}
                     {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
                   </div>
                   <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
-                </div>
-                <div className="text-xs text-slate-500">查看</div>
-              </button>
+                </button>
+
+                {watchlistSet.has(it.symbol.toUpperCase()) ? (
+                  <div className="shrink-0 text-xs text-slate-500">已在自选</div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => addToWatchlist(it.symbol)}
+                    className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    加入自选
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         ) : (
