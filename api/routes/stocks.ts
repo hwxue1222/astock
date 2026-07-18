@@ -16,6 +16,7 @@ import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
+import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
 
 const router = Router()
 
@@ -79,6 +80,25 @@ router.get('/universe', async (req: Request, res: Response): Promise<void> => {
     success: false,
     error: 'Universe provider unavailable (real data required)',
   })
+})
+
+router.get('/moneyflow/industry', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const fenlei = Number(req.query.fenlei ?? 0)
+    const items = await getSinaIndustryMoneyflow({
+      fenlei: fenlei === 1 ? 1 : 0,
+      limit: 30,
+      ttlSeconds: 120,
+      timeoutMs: 12_000,
+    })
+    res.status(200).json({ success: true, items })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Industry moneyflow unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
 })
 
 router.get('/ths-classic', async (req: Request, res: Response): Promise<void> => {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import SymbolListCard from '@/components/SymbolListCard'
 import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
+import IndustryMoneyflowPanel from '@/components/IndustryMoneyflowPanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
 import { getThsClassicStats, getUniverse } from '@/lib/stockApi'
@@ -106,6 +107,8 @@ export default function Home() {
                 .finally(() => setThsLoading(false))
             }}
           />
+
+          <IndustryMoneyflowPanel />
 
           <div className="grid gap-4 lg:grid-cols-3">
             <SimilarStocksPanel

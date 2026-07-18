@@ -4,6 +4,7 @@ type EastmoneyStockGetResponse = {
   data?: {
     f14?: string
     f58?: string
+    f100?: string
     f116?: number
     f117?: number
     f20?: number
@@ -32,11 +33,11 @@ function guessSecid(code: string): string {
 export async function getEastmoneyQuote(input: {
   code: string
   timeoutMs?: number
-}): Promise<{ name?: string; marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }> {
+}): Promise<{ name?: string; industry?: string; marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }> {
   const secid = guessSecid(input.code)
   const q = new URLSearchParams()
   q.set('secid', secid)
-  q.set('fields', 'f58,f14,f116,f117,f20,f21,f9,f162')
+  q.set('fields', 'f58,f14,f100,f116,f117,f20,f21,f9,f162')
   q.set('ut', 'bd1d9ddb04089700cf9c27f6f7426281')
   const url = `https://push2.eastmoney.com/api/qt/stock/get?${q.toString()}`
 
@@ -63,6 +64,8 @@ export async function getEastmoneyQuote(input: {
         ? d.f14.trim()
         : undefined
 
+  const industry = typeof d.f100 === 'string' ? d.f100.trim() : undefined
+
   const marketCapYuan =
     typeof d.f116 === 'number'
       ? d.f116
@@ -85,6 +88,7 @@ export async function getEastmoneyQuote(input: {
 
   return {
     name,
+    industry,
     marketCapYuan: Number.isFinite(marketCapYuan as number) ? marketCapYuan : undefined,
     floatMarketCapYuan: Number.isFinite(floatMarketCapYuan as number) ? floatMarketCapYuan : undefined,
     pe: Number.isFinite(pe as number) ? pe : undefined,

@@ -169,7 +169,24 @@ export interface ThsClassicArticleStocksResponse {
 export interface StockQuoteResponse {
   symbol: string
   name?: string
+  industry?: string
   marketCapYuan?: number
   floatMarketCapYuan?: number
   pe?: number
+}
+
+export type IndustryMoneyflowItem = {
+  name: string
+  avgPrice: number
+  changePct: number
+  inflowWan: number
+  outflowWan: number
+  netInflowWan: number
+  netInflowRate: number
+  leadingSymbol?: string
+  leadingName?: string
+}
+
+export interface IndustryMoneyflowResponse {
+  items: IndustryMoneyflowItem[]
 }

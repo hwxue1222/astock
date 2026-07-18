@@ -1,6 +1,7 @@
 import type {
   KlineFqt,
   KlineKlt,
+  IndustryMoneyflowResponse,
   SimilarStocksResponse,
   MajorEvent,
   RiskSignalsResponse,
@@ -92,6 +93,19 @@ export async function getKline(
 export async function getQuote(symbol: string, signal?: AbortSignal): Promise<StockQuoteResponse> {
   const data = await fetchJson<{ success: boolean } & StockQuoteResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/quote`,
+    signal,
+  )
+  return data
+}
+
+export async function getIndustryMoneyflow(
+  signal?: AbortSignal,
+  input?: { fenlei?: 0 | 1 },
+): Promise<IndustryMoneyflowResponse> {
+  const q = new URLSearchParams()
+  if (typeof input?.fenlei === 'number') q.set('fenlei', String(input.fenlei))
+  const data = await fetchJson<{ success: boolean } & IndustryMoneyflowResponse>(
+    `/api/stocks/moneyflow/industry?${q.toString()}`,
     signal,
   )
   return data
