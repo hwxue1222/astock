@@ -128,7 +128,7 @@ export default function SimilarStocksPanel(props: {
           ) : null}
 
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="shrink-0 text-sm text-slate-300">标准股：</div>
+            <div className="shrink-0 text-sm text-slate-300">标准1（标准股）：</div>
             <div className="truncate text-sm font-semibold text-slate-100">{props.targetSymbol}</div>
           </div>
 
@@ -268,7 +268,7 @@ export default function SimilarStocksPanel(props: {
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        基于标准股寻找相似K线走势（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
+        标准1=标准股；标准2/3=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
