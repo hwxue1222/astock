@@ -19,6 +19,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
   const [items, setItems] = useState<IndustryMoneyflowItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<'all' | 'pos' | 'neg'>('all')
 
   useEffect(() => {
     const ac = new AbortController()
@@ -41,7 +42,15 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
     return () => ac.abort()
   }, [])
 
-  const rows = useMemo(() => items.slice(0, 20), [items])
+  const rows = useMemo(() => {
+    const xs =
+      mode === 'pos'
+        ? items.filter((x) => x.netInflowRate >= 0)
+        : mode === 'neg'
+          ? items.filter((x) => x.netInflowRate < 0)
+          : items
+    return xs.slice(0, 30)
+  }, [items, mode])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -49,6 +58,45 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
         <div>
           <div className="text-sm font-semibold text-slate-100">行业资金流向</div>
           <div className="text-xs text-slate-500">来源：新浪资金流向</div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('all')}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              mode === 'all'
+                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+            )}
+          >
+            全部
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('pos')}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              mode === 'pos'
+                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+            )}
+          >
+            仅正
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('neg')}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              mode === 'neg'
+                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+            )}
+          >
+            仅负
+          </button>
         </div>
       </div>
 
@@ -94,6 +142,8 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
             </div>
           </div>
         ) : null}
+
+        {!loading && !error && !rows.length ? <div className="text-sm text-slate-400">暂无数据</div> : null}
       </div>
     </div>
   )
