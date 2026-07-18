@@ -14,6 +14,8 @@ export default function Home() {
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
+  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
+  const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
   const klineKlt = useStockStore((s) => s.klineKlt)
   const klineFqt = useStockStore((s) => s.klineFqt)
   const klineLimit = useStockStore((s) => s.klineLimit)
@@ -109,6 +111,11 @@ export default function Home() {
           <div className="grid gap-4 lg:grid-cols-3">
             <SimilarStocksPanel
               targetSymbol={standardSymbol ?? '002829'}
+              standardSymbol={standardSymbol}
+              onSetStandardSymbol={setStandardSymbol}
+              onClearStandardSymbol={clearStandardSymbol}
+              watchlist={watchlist}
+              onAddToWatchlist={addToWatchlist}
               mode="kline"
               klt={klineKlt}
               fqt={klineFqt}

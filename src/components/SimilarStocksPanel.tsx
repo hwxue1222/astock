@@ -11,22 +11,60 @@ export default function SimilarStocksPanel(props: {
   fqt: KlineFqt
   days: number
   mode?: 'mixed' | 'kline'
+  standardSymbol?: string | null
+  onSetStandardSymbol?: (symbol: string) => void
+  onClearStandardSymbol?: () => void
+  watchlist?: string[]
+  onAddToWatchlist?: (symbol: string) => void
 }) {
   const navigate = useNavigate()
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
+  const addToWatchlistFromStore = useStockStore((s) => s.addToWatchlist)
   const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
 
   const mode = props.mode ?? 'mixed'
+  const showStandardControls =
+    typeof props.onSetStandardSymbol === 'function' && typeof props.onClearStandardSymbol === 'function'
 
   const [data, setData] = useState<SimilarStocksResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [runKey, setRunKey] = useState(0)
 
-  const watchlist = useStockStore((s) => s.watchlist)
-  const addToWatchlist = useStockStore((s) => s.addToWatchlist)
-  const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
+  const [standardDraft, setStandardDraft] = useState<string>(() => {
+    return String(props.standardSymbol ?? props.targetSymbol ?? '').toUpperCase()
+  })
+
+  useEffect(() => {
+    const next = String(props.standardSymbol ?? props.targetSymbol ?? '').toUpperCase()
+    setStandardDraft(next)
+  }, [props.standardSymbol, props.targetSymbol])
+
+  const standardDraftCode = useMemo(() => {
+    const raw = String(standardDraft ?? '').trim().toUpperCase()
+    const m = raw.match(/(\d{6})/)
+    return m ? m[1] : ''
+  }, [standardDraft])
+
+  const standardInWatchlist = useMemo(() => {
+    const wl = props.watchlist ?? []
+    if (!standardDraftCode) return false
+    return wl.map((x) => String(x).toUpperCase()).includes(standardDraftCode)
+  }, [props.watchlist, standardDraftCode])
+
+  const addOneToWatchlist = useMemo(() => {
+    return (symbol: string) => {
+      const s = String(symbol).toUpperCase()
+      if (props.onAddToWatchlist) props.onAddToWatchlist(s)
+      else addToWatchlistFromStore(s)
+    }
+  }, [addToWatchlistFromStore, props.onAddToWatchlist])
+
+  const watchlistSet = useMemo(() => {
+    const wl = props.watchlist ?? []
+    return new Set(wl.map((x) => String(x).toUpperCase()))
+  }, [props.watchlist])
 
   useEffect(() => {
     if (runKey === 0) return
@@ -86,6 +124,67 @@ export default function SimilarStocksPanel(props: {
       <div className="text-sm font-semibold text-slate-100">相似选股</div>
 
       <div className="mt-3 space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+        {showStandardControls ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-xs font-semibold text-slate-200">标准股</div>
+
+              {props.onAddToWatchlist ? (
+                standardInWatchlist ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 opacity-80"
+                  >
+                    已在自选
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!standardDraftCode) return
+                      addOneToWatchlist(standardDraftCode)
+                    }}
+                    className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    加入自选
+                  </button>
+                )
+              ) : null}
+
+              <div className="text-xs font-semibold text-slate-100">{props.targetSymbol}</div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={standardDraft}
+                onChange={(e) => setStandardDraft(e.target.value)}
+                placeholder="输入6位股票代码"
+                className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!standardDraftCode) return
+                  props.onSetStandardSymbol?.(standardDraftCode)
+                }}
+                className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                设为标准
+              </button>
+              <button
+                type="button"
+                onClick={() => props.onClearStandardSymbol?.()}
+                className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                清除标准
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="border-t border-slate-800" />
+
         <div className="text-xs font-semibold text-slate-200">选股标准</div>
 
         {mode === 'mixed' ? (
@@ -193,7 +292,7 @@ export default function SimilarStocksPanel(props: {
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        标准1/2=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
+        标准股用于对比；标准1/2=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -248,7 +347,7 @@ export default function SimilarStocksPanel(props: {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => addToWatchlist(it.symbol)}
+                        onClick={() => addOneToWatchlist(it.symbol)}
                         className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
                       >
                         加入自选
