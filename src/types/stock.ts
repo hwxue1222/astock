@@ -64,12 +64,6 @@ export interface StockRatiosResponse {
   }
 }
 
-export interface StockMarketCapsResponse {
-  symbol: string
-  marketCapYuan?: number
-  floatMarketCapYuan?: number
-}
-
 export interface RiskSignalsResponse {
   symbol: string
   updatedAt: string

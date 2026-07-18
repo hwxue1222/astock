@@ -7,7 +7,6 @@ import type {
   RumorsResponse,
   StockItem,
   StockKlineResponse,
-  StockMarketCapsResponse,
   StockRatiosResponse,
   ThsClassicStatsResponse,
   ThsClassicArticleStocksResponse,
@@ -54,14 +53,6 @@ export async function getRatios(
   q.set('asOf', asOf)
   const data = await fetchJson<{ success: boolean } & StockRatiosResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/ratios?${q.toString()}`,
-    signal,
-  )
-  return data
-}
-
-export async function getMarketCaps(symbol: string, signal?: AbortSignal): Promise<StockMarketCapsResponse> {
-  const data = await fetchJson<{ success: boolean } & StockMarketCapsResponse>(
-    `/api/stocks/${encodeURIComponent(symbol)}/mktcaps`,
     signal,
   )
   return data
