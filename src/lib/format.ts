@@ -23,6 +23,12 @@ export function formatCompactNumber(n: number | undefined): string {
   return n.toFixed(2)
 }
 
+export function formatYiFromYuan(yuan: number | undefined): string {
+  if (yuan === undefined) return '—'
+  if (!Number.isFinite(yuan)) return '—'
+  return `${(yuan / 1e8).toFixed(2)}亿`
+}
+
 export function formatRatio(value: number, unitHint: '%' | 'x'): string {
   if (!Number.isFinite(value)) return '数据不足'
   if (unitHint === '%') return `${(value * 100).toFixed(1)}%`
@@ -40,4 +46,3 @@ export function riskLevelClass(level: RiskLevel): string {
   if (level === 'MEDIUM') return 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/30'
   return 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-500/30'
 }
-

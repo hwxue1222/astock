@@ -1,7 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { getKline, getQuote, getRatios } from '@/lib/stockApi'
-import { formatCompactNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { StockItem } from '@/types/stock'
 import type { StockKlineResponse, StockRatiosResponse } from '@/types/stock'
@@ -152,9 +151,9 @@ export default function SymbolListCard(props: {
                       <div>市值：{formatYi(quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap)}</div>
                       <div>流通：{formatYi(quoteBySymbol[symbol]?.floatMarketCapYuan)}</div>
                       <div>PE：{formatPe(quoteBySymbol[symbol]?.pe)}</div>
-                      <div>货币：{formatCompactNumber(ratiosBySymbol[symbol]?.fields?.cash)}</div>
-                      <div>总资：{formatCompactNumber(ratiosBySymbol[symbol]?.fields?.totalAssets)}</div>
-                      <div>净资：{formatCompactNumber(ratiosBySymbol[symbol]?.fields?.netAssets)}</div>
+                      <div>货币：{formatYi(ratiosBySymbol[symbol]?.fields?.cash)}</div>
+                      <div>总资：{formatYi(ratiosBySymbol[symbol]?.fields?.totalAssets)}</div>
+                      <div>净资：{formatYi(ratiosBySymbol[symbol]?.fields?.netAssets)}</div>
                     </div>
                   ) : null}
                 </button>

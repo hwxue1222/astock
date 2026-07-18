@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import type { StockRatiosResponse } from '@/types/stock'
-import { formatCompactNumber, formatRatio } from '@/lib/format'
+import { formatRatio, formatYiFromYuan } from '@/lib/format'
 
 export default function RatiosPanel(props: {
   data: StockRatiosResponse | null
@@ -14,11 +14,11 @@ export default function RatiosPanel(props: {
   function valueHint(key: string): string {
     const f = props.data?.fields
     if (!f) return '数值：—'
-    const netAssets = formatCompactNumber(f.netAssets)
-    const totalAssets = formatCompactNumber(f.totalAssets)
-    const revenue = formatCompactNumber(f.revenue)
-    const cash = formatCompactNumber(f.cash)
-    const marketCap = formatCompactNumber(f.marketCap)
+    const netAssets = formatYiFromYuan(f.netAssets)
+    const totalAssets = formatYiFromYuan(f.totalAssets)
+    const revenue = formatYiFromYuan(f.revenue)
+    const cash = formatYiFromYuan(f.cash)
+    const marketCap = formatYiFromYuan(f.marketCap)
 
     if (key === 'net_assets_over_total_assets') {
       return `数值：净资产 ${netAssets} / 总资产 ${totalAssets}`
@@ -122,19 +122,19 @@ export default function RatiosPanel(props: {
                       <div>口径：{r.formula}</div>
                       <div className="mt-2 grid grid-cols-2 gap-2">
                         <div className="rounded-lg bg-slate-900/60 p-2">
-                          市值：{formatCompactNumber(props.data?.fields.marketCap)}
+                          市值：{formatYiFromYuan(props.data?.fields.marketCap)}
                         </div>
                         <div className="rounded-lg bg-slate-900/60 p-2">
-                          总资产：{formatCompactNumber(props.data?.fields.totalAssets)}
+                          总资产：{formatYiFromYuan(props.data?.fields.totalAssets)}
                         </div>
                         <div className="rounded-lg bg-slate-900/60 p-2">
-                          净资产：{formatCompactNumber(props.data?.fields.netAssets)}
+                          净资产：{formatYiFromYuan(props.data?.fields.netAssets)}
                         </div>
                         <div className="rounded-lg bg-slate-900/60 p-2">
-                          现金：{formatCompactNumber(props.data?.fields.cash)}
+                          现金：{formatYiFromYuan(props.data?.fields.cash)}
                         </div>
                         <div className="rounded-lg bg-slate-900/60 p-2">
-                          营收：{formatCompactNumber(props.data?.fields.revenue)}
+                          营收：{formatYiFromYuan(props.data?.fields.revenue)}
                         </div>
                       </div>
                     </div>

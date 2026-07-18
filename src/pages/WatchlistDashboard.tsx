@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '@/components/TopBar'
-import { formatCompactNumber, formatRatio, riskLevelClass, riskLevelLabel } from '@/lib/format'
+import { formatRatio, formatYiFromYuan, riskLevelClass, riskLevelLabel } from '@/lib/format'
 import { getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
@@ -271,7 +271,7 @@ export default function WatchlistDashboard() {
                         </td>
 
                         <td className="px-4 py-3 text-slate-300">
-                          {marketCap ? formatCompactNumber(marketCap) : '—'}
+                          {formatYiFromYuan(marketCap)}
                         </td>
                         <td className="px-4 py-3 text-slate-400">{asOfDate ?? '—'}</td>
                       </tr>
