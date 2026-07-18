@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SymbolListCard from '@/components/SymbolListCard'
+import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
@@ -16,6 +17,10 @@ export default function Home() {
   const toggleWatchlist = useStockStore((s) => s.toggleWatchlist)
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
   const toggleBlacklist = useStockStore((s) => s.toggleBlacklist)
+  const standardSymbol = useStockStore((s) => s.standardSymbol)
+  const klineKlt = useStockStore((s) => s.klineKlt)
+  const klineFqt = useStockStore((s) => s.klineFqt)
+  const klineLimit = useStockStore((s) => s.klineLimit)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
   const [universeError, setUniverseError] = useState<string | null>(null)
@@ -102,7 +107,13 @@ export default function Home() {
             }}
           />
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <SimilarStocksPanel
+              targetSymbol={standardSymbol ?? '002829'}
+              klt={klineKlt}
+              fqt={klineFqt}
+              days={klineLimit}
+            />
             <SymbolListCard
               title="自选股"
               symbols={watchlist}

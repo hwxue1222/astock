@@ -5,7 +5,6 @@ import KlinePanel from '@/components/KlinePanel'
 import RatiosPanel from '@/components/RatiosPanel'
 import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
-import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
 import { getEvents, getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
@@ -272,12 +271,6 @@ export default function StockDetail() {
               onChangeAsOf={(asOf) => setRatiosAsOf(asOf)}
               expandedKeys={expandedRatioKeys}
               onToggleExpanded={toggleRatioExpanded}
-            />
-            <SimilarStocksPanel
-              targetSymbol={standardSymbol ?? routeSymbol}
-              klt={klineKlt}
-              fqt={klineFqt}
-              days={klineLimit}
             />
           </div>
         </div>

@@ -15,6 +15,18 @@ export default function SimilarStocksPanel(props: {
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
   const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
+  const standardSymbol = useStockStore((s) => s.standardSymbol)
+  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
+  const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
+
+  const [standardDraft, setStandardDraft] = useState<string>(() => String(standardSymbol ?? '').toUpperCase())
+
+  useEffect(() => {
+    setStandardDraft(String(standardSymbol ?? '').toUpperCase())
+  }, [standardSymbol])
+
+  const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
+  const compareSymbol = standardSymbol ?? props.targetSymbol
 
   const [data, setData] = useState<SimilarStocksResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -34,7 +46,7 @@ export default function SimilarStocksPanel(props: {
     ].filter((x): x is 1 | 2 | 3 => x !== null)
 
     getSimilarStocks(
-      props.targetSymbol,
+      compareSymbol,
       {
         days: props.days,
         top: 10,
@@ -65,7 +77,7 @@ export default function SimilarStocksPanel(props: {
         setLoading(false)
       })
     return () => ac.abort()
-  }, [props.targetSymbol, props.klt, props.fqt, props.days, runKey, standards])
+  }, [compareSymbol, props.klt, props.fqt, props.days, runKey, standards])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -73,6 +85,36 @@ export default function SimilarStocksPanel(props: {
 
       <div className="mt-3 space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3">
         <div className="text-xs font-semibold text-slate-200">选股标准</div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-xs text-slate-400">对比股票</div>
+          <input
+            value={standardDraft}
+            onChange={(e) => setStandardDraft(e.target.value)}
+            placeholder="输入6位股票代码"
+            className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
+          />
+          <button
+            type="button"
+            disabled={!standardDraftCode}
+            onClick={() => {
+              if (!standardDraftCode) return
+              setStandardSymbol(standardDraftCode)
+            }}
+            className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+          >
+            设为对比
+          </button>
+          <button
+            type="button"
+            disabled={!standardSymbol}
+            onClick={() => clearStandardSymbol()}
+            className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+          >
+            清除
+          </button>
+          <div className="text-xs font-semibold text-slate-100">{compareSymbol}</div>
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-slate-200">
@@ -114,26 +156,7 @@ export default function SimilarStocksPanel(props: {
             onChange={(e) => setStandard('s2', { lastDays: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">日形态相似 + 换手率放大 ≥</div>
-          <input
-            type="number"
-            value={standards.s2.turnoverSpikeMultiple}
-            min={1.2}
-            step={0.1}
-            onChange={(e) => setStandard('s2', { turnoverSpikeMultiple: Number(e.target.value) })}
-            className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">倍（预选Top</div>
-          <input
-            type="number"
-            value={standards.s2.preselectTop}
-            min={10}
-            max={80}
-            step={1}
-            onChange={(e) => setStandard('s2', { preselectTop: Number(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">）</div>
+          <div className="text-xs text-slate-400">日 K 线形态与对比股相似</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

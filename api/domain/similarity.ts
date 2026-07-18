@@ -83,34 +83,7 @@ function buildDailyShapeFeature(input: { candles: Candle[]; lastDays: number }):
   return [...zr, ...zb, ...zg]
 }
 
-async function hasTurnoverSpikeInLastDays(input: {
-  code: string
-  days: number
-  multiple: number
-}): Promise<boolean> {
-  const days = Math.max(2, Math.min(20, input.days))
-  const multiple = Math.max(1.1, Math.min(10, input.multiple))
-  const out = await getEastmoneyKline({
-    code: input.code,
-    klt: '101',
-    fqt: '1',
-    limit: days + 1,
-    timeoutMs: 5_000,
-  })
-  const xs = out.candles
-    .slice(-1 * (days + 1))
-    .map((c) => (typeof c.turnover === 'number' ? c.turnover : null))
-
-  if (xs.length < days + 1) return false
-
-  for (let i = 1; i < xs.length; i += 1) {
-    const prev = xs[i - 1]
-    const cur = xs[i]
-    if (prev === null || cur === null) continue
-    if (prev > 0 && cur >= prev * multiple) return true
-  }
-  return false
-}
+void 0
 
 function avgRangePct(input: { candles: Candle[]; lastDays: number }): number | null {
   const n = Math.max(2, Math.min(30, input.lastDays))
@@ -455,24 +428,5 @@ export async function findSimilarStocks(input: {
   })
 
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
-
-  if (enabled.has(2)) {
-    const pool = scored.slice(0, Math.min(s2PreselectTop, 10))
-    const passed = await mapLimit(pool, 4, async (it) => {
-      try {
-        const ok = await hasTurnoverSpikeInLastDays({
-          code: it.symbol,
-          days: s2LastDays,
-          multiple: s2TurnoverSpikeMultiple,
-        })
-        return ok ? it : null
-      } catch {
-        return null
-      }
-    })
-    const out = passed.filter((x): x is SimilarStock => x !== null).slice(0, top)
-    return { target, candidates: candidates.length, top: out, meta: { window } }
-  }
-
   return { target, candidates: candidates.length, top: scored.slice(0, top), meta: { window } }
 }

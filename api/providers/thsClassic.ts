@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { readJsonCache, writeJsonCache } from './fsCache.js'
+import { fetchText } from './http.js'
 
 async function fetchHtmlDecoded(url: string, input?: { timeoutMs?: number; headers?: Record<string, string> }): Promise<string> {
   const ac = new AbortController()
@@ -43,6 +44,8 @@ async function fetchHtmlDecoded(url: string, input?: { timeoutMs?: number; heade
     }
 
     return best
+  } catch {
+    return await fetchText(url, input)
   } finally {
     clearTimeout(t)
   }
@@ -256,14 +259,24 @@ export async function getThsClassicArticleStocks(input: {
   const cached = await readJsonCache<ThsClassicArticleStocks>(cachePath, { ttlSeconds })
   if (cached?.codes?.length) return { url, codes: cached.codes.slice(0, lim) }
 
-  const html = await fetchHtmlDecoded(url, {
-    timeoutMs: input.timeoutMs ?? 12_000,
-    headers: {
-      referer: 'https://www.10jqka.com.cn/classic/',
-      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
-    },
-  })
+  let html = ''
+  try {
+    html = await fetchHtmlDecoded(url, {
+      timeoutMs: input.timeoutMs ?? 12_000,
+      headers: {
+        referer: 'https://www.10jqka.com.cn/classic/',
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
+      },
+    })
+  } catch {
+    html = await fetchText(`https://r.jina.ai/${url}`, {
+      timeoutMs: input.timeoutMs ?? 12_000,
+      headers: {
+        accept: 'text/plain,*/*;q=0.8',
+      },
+    })
+  }
 
   const plain = stripTags(html)
   const codes = pickAshareCodesFromText(plain, 80).slice(0, lim)
