@@ -15,6 +15,7 @@ import { findSimilarStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
+import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 
 const router = Router()
 
@@ -108,6 +109,21 @@ router.get('/ths-classic/stocks', async (req: Request, res: Response): Promise<v
     res.status(502).json({
       success: false,
       error: 'THS classic article unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/:symbol/quote', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.params.symbol ?? '').toUpperCase()
+  const code = normalizeAshareCode(symbol)
+  try {
+    const out = await getEastmoneyQuote({ code, timeoutMs: 12_000 })
+    res.status(200).json({ success: true, symbol: code, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Quote provider unavailable (real data required)',
       detail: errorMessage(e),
     })
   }
@@ -386,6 +402,7 @@ router.get(
     const s2LastDays = Number(req.query.s2LastDays ?? 5)
     const s2TurnoverSpikeMultiple = Number(req.query.s2TurnoverSpikeMultiple ?? 2)
     const s2PreselectTop = Number(req.query.s2PreselectTop ?? 30)
+    const s2MinSimilarity = Number(req.query.s2MinSimilarity ?? 0)
     const s3LastDays = Number(req.query.s3LastDays ?? 5)
     const s3RangeRatioMin = Number(req.query.s3RangeRatioMin ?? 0.5)
     const s3RangeRatioMax = Number(req.query.s3RangeRatioMax ?? 2)
@@ -412,6 +429,7 @@ router.get(
         s2LastDays: Number.isFinite(s2LastDays) ? s2LastDays : 5,
         s2TurnoverSpikeMultiple: Number.isFinite(s2TurnoverSpikeMultiple) ? s2TurnoverSpikeMultiple : 2,
         s2PreselectTop: Number.isFinite(s2PreselectTop) ? s2PreselectTop : 30,
+        s2MinSimilarity: Number.isFinite(s2MinSimilarity) ? s2MinSimilarity : 0,
         s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
         s3RangeRatioMin: Number.isFinite(s3RangeRatioMin) ? s3RangeRatioMin : 0.5,
         s3RangeRatioMax: Number.isFinite(s3RangeRatioMax) ? s3RangeRatioMax : 2,

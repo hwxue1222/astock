@@ -55,8 +55,7 @@ export default function SimilarStocksPanel(props: {
         enabled,
         s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
         s2LastDays: standards.s2.lastDays,
-        s2TurnoverSpikeMultiple: standards.s2.turnoverSpikeMultiple,
-        s2PreselectTop: standards.s2.preselectTop,
+        s2MinSimilarity: standards.s2.minSimilarity,
         s3LastDays: standards.s3.lastDays,
         s3RangeRatioMin: standards.s3.rangeRatioMin,
         s3RangeRatioMax: standards.s3.rangeRatioMax,
@@ -156,7 +155,17 @@ export default function SimilarStocksPanel(props: {
             onChange={(e) => setStandard('s2', { lastDays: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">日 K 线形态与对比股相似</div>
+          <div className="text-xs text-slate-400">日 K 线形态与对比股相似 ≥</div>
+          <input
+            type="number"
+            value={Math.round(standards.s2.minSimilarity * 100)}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(e) => setStandard('s2', { minSimilarity: Number(e.target.value) / 100 })}
+            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <div className="text-xs text-slate-400">%</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

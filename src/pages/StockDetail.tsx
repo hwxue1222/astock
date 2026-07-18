@@ -22,8 +22,8 @@ export default function StockDetail() {
   const routeSymbol = String(params.symbol ?? '').toUpperCase()
 
   const selectedSymbol = useStockStore((s) => s.selectedSymbol)
-  const standardSymbol = useStockStore((s) => s.standardSymbol)
   const watchlist = useStockStore((s) => s.watchlist)
+  const blacklist = useStockStore((s) => s.blacklist)
   const rangeDays = useStockStore((s) => s.rangeDays)
   const eventTypes = useStockStore((s) => s.eventTypes)
   const ratiosAsOf = useStockStore((s) => s.ratiosAsOf)
@@ -39,9 +39,8 @@ export default function StockDetail() {
   const toggleRatioExpanded = useStockStore((s) => s.toggleRatioExpanded)
   const toggleSignalExpanded = useStockStore((s) => s.toggleSignalExpanded)
   const setKline = useStockStore((s) => s.setKline)
-  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
-  const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
+  const addToBlacklist = useStockStore((s) => s.addToBlacklist)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
 
@@ -158,6 +157,11 @@ export default function StockDetail() {
     return watchlist.map((x) => x.toUpperCase()).includes(s)
   }, [watchlist, routeSymbol])
 
+  const inBlacklist = useMemo(() => {
+    const s = routeSymbol.toUpperCase()
+    return blacklist.map((x) => x.toUpperCase()).includes(s)
+  }, [blacklist, routeSymbol])
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <TopBar
@@ -201,26 +205,18 @@ export default function StockDetail() {
               >
                 {inWatchlist ? '已在自选' : '加入自选'}
               </button>
-              <div className="text-xs text-slate-400">
-                标准股：
-                <span className="text-slate-200">{standardSymbol ?? '未设置'}</span>
-              </div>
               <button
                 type="button"
-                onClick={() => setStandardSymbol(routeSymbol)}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+                disabled={inBlacklist}
+                onClick={() => addToBlacklist(routeSymbol)}
+                className={
+                  inBlacklist
+                    ? 'rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-500'
+                    : 'rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800'
+                }
               >
-                设为标准
+                {inBlacklist ? '已在黑名单' : '加入黑名单'}
               </button>
-              {standardSymbol ? (
-                <button
-                  type="button"
-                  onClick={() => clearStandardSymbol()}
-                  className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
-                >
-                  清除标准
-                </button>
-              ) : null}
             </div>
           </div>
         </div>
@@ -233,6 +229,14 @@ export default function StockDetail() {
               fqt={klineFqt}
               limit={klineLimit}
               onChange={(next) => setKline(next)}
+            />
+            <RiskSummary
+              data={signals}
+              loading={signalsLoading}
+              error={signalsError}
+              expandedSignalIds={expandedSignalIds}
+              onToggleSignalExpanded={toggleSignalExpanded}
+              onFocusEvent={(id) => setHighlightEventId(id)}
             />
             <EventsFeed
               events={events}
@@ -255,14 +259,6 @@ export default function StockDetail() {
           </div>
 
           <div className="space-y-4">
-            <RiskSummary
-              data={signals}
-              loading={signalsLoading}
-              error={signalsError}
-              expandedSignalIds={expandedSignalIds}
-              onToggleSignalExpanded={toggleSignalExpanded}
-              onFocusEvent={(id) => setHighlightEventId(id)}
-            />
             <RatiosPanel
               data={ratios}
               loading={ratiosLoading}

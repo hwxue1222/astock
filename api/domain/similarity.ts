@@ -301,6 +301,7 @@ export async function findSimilarStocks(input: {
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
   s2PreselectTop: number
+  s2MinSimilarity?: number
   s3LastDays: number
   s3RangeRatioMin: number
   s3RangeRatioMax: number
@@ -311,8 +312,9 @@ export async function findSimilarStocks(input: {
 
   const s1MaxMarketCapYi = Math.max(1, Math.min(10_000, input.s1MaxMarketCapYi))
   const s2LastDays = Math.max(3, Math.min(15, input.s2LastDays))
-  const s2TurnoverSpikeMultiple = Math.max(1.1, Math.min(10, input.s2TurnoverSpikeMultiple))
-  const s2PreselectTop = Math.max(10, Math.min(80, input.s2PreselectTop))
+  const s2MinSimilarity = Math.max(0, Math.min(1, input.s2MinSimilarity ?? 0))
+  void input.s2TurnoverSpikeMultiple
+  void input.s2PreselectTop
   const s3LastDays = Math.max(3, Math.min(30, input.s3LastDays))
   const s3RangeRatioMin = Math.max(0.05, Math.min(10, input.s3RangeRatioMin))
   const s3RangeRatioMax = Math.max(s3RangeRatioMin, Math.min(10, input.s3RangeRatioMax))
@@ -409,10 +411,12 @@ export async function findSimilarStocks(input: {
         const fv = buildDailyShapeFeature({ candles, lastDays: s2LastDays })
         if (!fv.length || !fvTarget.length) return null
         const s = cosine(fvTarget, fv)
+        const sim = clamp01((s + 1) / 2)
+        if (sim < s2MinSimilarity) return null
         return {
           symbol: code,
           name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-          score: clamp01((s + 1) / 2),
+          score: sim,
         } satisfies SimilarStock
       }
 

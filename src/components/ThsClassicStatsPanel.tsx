@@ -1,6 +1,6 @@
 import { ExternalLink, RefreshCcw } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { getThsClassicArticleStocks } from '@/lib/stockApi'
+import { getKline, getQuote, getRatios, getThsClassicArticleStocks } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
@@ -22,6 +22,41 @@ export default function ThsClassicStatsPanel(props: {
   const [loadingByRank, setLoadingByRank] = useState<Record<number, boolean>>({})
   const [codesByRank, setCodesByRank] = useState<Record<number, string[]>>({})
   const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
+
+  const [quoteByCode, setQuoteByCode] = useState<
+    Record<string, { marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
+  >({})
+  const [fieldsByCode, setFieldsByCode] = useState<
+    Record<string, { cash?: number; totalAssets?: number; netAssets?: number }>
+  >({})
+  const [klineByCode, setKlineByCode] = useState<Record<string, { closes: number[] }>>({})
+
+  function formatYi(yuan?: number): string {
+    if (yuan === undefined) return '—'
+    if (!Number.isFinite(yuan)) return '—'
+    return `${(yuan / 1e8).toFixed(1)}亿`
+  }
+
+  function formatPe(pe?: number): string {
+    if (pe === undefined) return '—'
+    if (!Number.isFinite(pe)) return '—'
+    return pe.toFixed(1)
+  }
+
+  function sparklinePoints(closes: number[], w = 90, h = 22): string {
+    if (closes.length < 2) return ''
+    const min = Math.min(...closes)
+    const max = Math.max(...closes)
+    const dx = w / (closes.length - 1)
+    const denom = Math.max(1e-9, max - min)
+    return closes
+      .map((v, i) => {
+        const x = i * dx
+        const y = h - ((v - min) / denom) * h
+        return `${x.toFixed(1)},${y.toFixed(1)}`
+      })
+      .join(' ')
+  }
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -95,11 +130,33 @@ export default function ThsClassicStatsPanel(props: {
                           {codesByRank[it.rank].map((code) => {
                             const already = watchlistSet.has(code)
                             const name = nameByCode.get(code)
+                            const q = quoteByCode[code]
+                            const f = fieldsByCode[code]
                             return (
                               <div key={code} className="flex items-center justify-between gap-2">
-                                <div className="min-w-0 text-xs text-slate-200">
-                                  <span className="font-semibold">{code}</span>
-                                  {name ? <span className="text-slate-400"> · {name}</span> : null}
+                                <div className="min-w-0">
+                                  <div className="text-xs text-slate-200">
+                                    <span className="font-semibold">{code}</span>
+                                    {name ? <span className="text-slate-400"> · {name}</span> : null}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                                    <div>市值：{formatYi(q?.marketCapYuan)}</div>
+                                    <div>流通：{formatYi(q?.floatMarketCapYuan)}</div>
+                                    <div>PE：{formatPe(q?.pe)}</div>
+                                    <div>货币：{formatYi(f?.cash)}</div>
+                                    <div>总资：{formatYi(f?.totalAssets)}</div>
+                                    <div>净资：{formatYi(f?.netAssets)}</div>
+                                  </div>
+                                </div>
+                                <div className="shrink-0">
+                                  <svg width="90" height="22" viewBox="0 0 90 22" className="block">
+                                    <polyline
+                                      fill="none"
+                                      stroke="rgb(148 163 184)"
+                                      strokeWidth="1.5"
+                                      points={sparklinePoints(klineByCode[code]?.closes ?? [])}
+                                    />
+                                  </svg>
                                 </div>
                                 {already ? (
                                   <div className="shrink-0 text-xs text-slate-500">已在自选</div>
@@ -141,6 +198,44 @@ export default function ThsClassicStatsPanel(props: {
                             .map((x) => String(x).toUpperCase())
                             .filter((x) => /^\d{6}$/.test(x))
                           setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
+
+                          const uniq = Array.from(new Set(codes))
+                          for (const code of uniq) {
+                            void getQuote(code)
+                              .then((q) => {
+                                setQuoteByCode((m) => ({
+                                  ...m,
+                                  [code]: {
+                                    marketCapYuan: q.marketCapYuan,
+                                    floatMarketCapYuan: q.floatMarketCapYuan,
+                                    pe: q.pe,
+                                  },
+                                }))
+                              })
+                              .catch(() => void 0)
+
+                            void getRatios(code, 'latest')
+                              .then((r) => {
+                                setFieldsByCode((m) => ({
+                                  ...m,
+                                  [code]: {
+                                    cash: r.fields?.cash,
+                                    totalAssets: r.fields?.totalAssets,
+                                    netAssets: r.fields?.netAssets,
+                                  },
+                                }))
+                              })
+                              .catch(() => void 0)
+
+                            void getKline(code, { klt: '101', fqt: '1', limit: 22 })
+                              .then((k) => {
+                                const closes = (k.candles ?? [])
+                                  .map((c) => c.close)
+                                  .filter((x) => Number.isFinite(x))
+                                setKlineByCode((m) => ({ ...m, [code]: { closes } }))
+                              })
+                              .catch(() => void 0)
+                          }
                         } catch (e: unknown) {
                           setErrorByRank((m) => ({ ...m, [it.rank]: e instanceof Error ? e.message : String(e) }))
                         } finally {

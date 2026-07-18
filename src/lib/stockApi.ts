@@ -8,6 +8,7 @@ import type {
   StockItem,
   StockKlineResponse,
   StockRatiosResponse,
+  StockQuoteResponse,
   ThsClassicStatsResponse,
   ThsClassicArticleStocksResponse,
 } from '@/types/stock'
@@ -88,6 +89,14 @@ export async function getKline(
   return data
 }
 
+export async function getQuote(symbol: string, signal?: AbortSignal): Promise<StockQuoteResponse> {
+  const data = await fetchJson<{ success: boolean } & StockQuoteResponse>(
+    `/api/stocks/${encodeURIComponent(symbol)}/quote`,
+    signal,
+  )
+  return data
+}
+
 export async function getSimilarStocks(
   symbol: string,
   input: {
@@ -100,6 +109,7 @@ export async function getSimilarStocks(
     s2LastDays?: number
     s2TurnoverSpikeMultiple?: number
     s2PreselectTop?: number
+    s2MinSimilarity?: number
     s3LastDays?: number
     s3RangeRatioMin?: number
     s3RangeRatioMax?: number
@@ -118,6 +128,7 @@ export async function getSimilarStocks(
   if (typeof input.s2TurnoverSpikeMultiple === 'number')
     q.set('s2TurnoverSpikeMultiple', String(input.s2TurnoverSpikeMultiple))
   if (typeof input.s2PreselectTop === 'number') q.set('s2PreselectTop', String(input.s2PreselectTop))
+  if (typeof input.s2MinSimilarity === 'number') q.set('s2MinSimilarity', String(input.s2MinSimilarity))
   if (typeof input.s3LastDays === 'number') q.set('s3LastDays', String(input.s3LastDays))
   if (typeof input.s3RangeRatioMin === 'number') q.set('s3RangeRatioMin', String(input.s3RangeRatioMin))
   if (typeof input.s3RangeRatioMax === 'number') q.set('s3RangeRatioMax', String(input.s3RangeRatioMax))
