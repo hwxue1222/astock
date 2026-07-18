@@ -20,6 +20,7 @@ export default function SimilarStocksPanel(props: {
   const navigate = useNavigate()
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
+  const addToWatchlistFromStore = useStockStore((s) => s.addToWatchlist)
   const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
 
   const mode = props.mode ?? 'mixed'
@@ -52,6 +53,19 @@ export default function SimilarStocksPanel(props: {
     return wl.map((x) => String(x).toUpperCase()).includes(standardDraftCode)
   }, [props.watchlist, standardDraftCode])
 
+  const addOneToWatchlist = useMemo(() => {
+    return (symbol: string) => {
+      const s = String(symbol).toUpperCase()
+      if (props.onAddToWatchlist) props.onAddToWatchlist(s)
+      else addToWatchlistFromStore(s)
+    }
+  }, [addToWatchlistFromStore, props.onAddToWatchlist])
+
+  const watchlistSet = useMemo(() => {
+    const wl = props.watchlist ?? []
+    return new Set(wl.map((x) => String(x).toUpperCase()))
+  }, [props.watchlist])
+
   useEffect(() => {
     if (runKey === 0) return
     const ac = new AbortController()
@@ -63,6 +77,13 @@ export default function SimilarStocksPanel(props: {
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
     ].filter((x): x is 1 | 2 | 3 => x !== null)
+
+    if (mode === 'kline' && !enabled.includes(2) && !enabled.includes(3)) {
+      setError('请至少勾选“标准2”或“标准3”')
+      setData(null)
+      setLoading(false)
+      return () => ac.abort()
+    }
 
     getSimilarStocks(
       props.targetSymbol,
@@ -102,65 +123,71 @@ export default function SimilarStocksPanel(props: {
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="text-sm font-semibold text-slate-100">相似选股</div>
 
-      {showStandardControls ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 p-3">
-          {props.onAddToWatchlist ? (
-            standardInWatchlist ? (
-              <button
-                type="button"
-                disabled
-                className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 opacity-80"
-              >
-                已在自选
-              </button>
-            ) : (
+      <div className="mt-3 space-y-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+        {showStandardControls ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-200">
+                <input type="checkbox" checked readOnly />
+                标准1（标准股）
+              </label>
+
+              {props.onAddToWatchlist ? (
+                standardInWatchlist ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 opacity-80"
+                  >
+                    已在自选
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!standardDraftCode) return
+                      addOneToWatchlist(standardDraftCode)
+                    }}
+                    className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    加入自选
+                  </button>
+                )
+              ) : null}
+
+              <div className="text-xs font-semibold text-slate-100">{props.targetSymbol}</div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={standardDraft}
+                onChange={(e) => setStandardDraft(e.target.value)}
+                placeholder="输入6位股票代码"
+                className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
+              />
               <button
                 type="button"
                 onClick={() => {
                   if (!standardDraftCode) return
-                  props.onAddToWatchlist?.(standardDraftCode)
+                  props.onSetStandardSymbol?.(standardDraftCode)
                 }}
                 className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
               >
-                加入自选
+                设为标准
               </button>
-            )
-          ) : null}
-
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="shrink-0 text-sm text-slate-300">标准1（标准股）：</div>
-            <div className="truncate text-sm font-semibold text-slate-100">{props.targetSymbol}</div>
+              <button
+                type="button"
+                onClick={() => props.onClearStandardSymbol?.()}
+                className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              >
+                清除标准
+              </button>
+            </div>
           </div>
+        ) : null}
 
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={standardDraft}
-              onChange={(e) => setStandardDraft(e.target.value)}
-              placeholder="输入6位股票代码"
-              className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                if (!standardDraftCode) return
-                props.onSetStandardSymbol?.(standardDraftCode)
-              }}
-              className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
-            >
-              设为标准
-            </button>
-            <button
-              type="button"
-              onClick={() => props.onClearStandardSymbol?.()}
-              className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
-            >
-              清除标准
-            </button>
-          </div>
-        </div>
-      ) : null}
+        <div className="border-t border-slate-800" />
 
-      <div className="mt-3 space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-3">
         <div className="text-xs font-semibold text-slate-200">选股标准</div>
 
         {mode === 'mixed' ? (
@@ -285,7 +312,7 @@ export default function SimilarStocksPanel(props: {
             onClick={() => addManyToWatchlist(data.top.map((x) => x.symbol))}
             className="whitespace-nowrap rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800"
           >
-            加入自选
+            全部加入自选
           </button>
         ) : null}
       </div>
@@ -297,25 +324,43 @@ export default function SimilarStocksPanel(props: {
           <div className="text-sm text-red-200">{error}</div>
         ) : data?.top?.length ? (
           <div className="space-y-2">
-            {data.top.map((it) => (
-              <button
-                key={it.symbol}
-                type="button"
-                onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
-                className={cn(
-                  'flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-left hover:bg-slate-900',
-                )}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-100">
-                    {it.symbol}
-                    {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
+            {data.top.map((it) => {
+              const already = watchlistSet.has(String(it.symbol).toUpperCase())
+              return (
+                <div
+                  key={it.symbol}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2',
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="truncate text-sm font-semibold text-slate-100">
+                      {it.symbol}
+                      {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
+                    </div>
+                    <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {already ? (
+                      <div className="text-xs text-slate-500">已在自选</div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => addOneToWatchlist(it.symbol)}
+                        className="whitespace-nowrap rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                      >
+                        加入自选
+                      </button>
+                    )}
+                    <div className="text-xs text-slate-500">查看</div>
                   </div>
-                  <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
                 </div>
-                <div className="text-xs text-slate-500">查看</div>
-              </button>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="text-sm text-slate-400">暂无结果</div>
