@@ -1,14 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse } from '@/types/stock'
 
-type SimilarRequest = {
-  symbol: string
-  input: Parameters<typeof getSimilarStocks>[1]
-}
+type SimilarInput = Parameters<typeof getSimilarStocks>[1]
 
 export default function SimilarStocksPanel(props: {
   targetSymbol: string
@@ -23,6 +20,8 @@ export default function SimilarStocksPanel(props: {
   const standardSymbol = useStockStore((s) => s.standardSymbol)
   const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
   const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
+  const similarLast = useStockStore((s) => s.similarLast)
+  const setSimilarLast = useStockStore((s) => s.setSimilarLast)
 
   const [standardDraft, setStandardDraft] = useState<string>(() => String(standardSymbol ?? '').toUpperCase())
 
@@ -33,10 +32,34 @@ export default function SimilarStocksPanel(props: {
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
   const compareSymbol = standardSymbol ?? props.targetSymbol
 
-  const [data, setData] = useState<SimilarStocksResponse | null>(null)
+  const data: SimilarStocksResponse | null = similarLast?.data ?? null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [request, setRequest] = useState<SimilarRequest | null>(null)
+  const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
+
+  const currentPlannedKey = useMemo(() => {
+    const enabled: Array<1 | 2 | 3> = [
+      standards.s1.enabled ? 1 : null,
+      standards.s2.enabled ? 2 : null,
+      standards.s3.enabled ? 3 : null,
+    ].filter((x): x is 1 | 2 | 3 => x !== null)
+
+    const input: SimilarInput = {
+      days: props.days,
+      top: 10,
+      klt: props.klt,
+      fqt: props.fqt,
+      enabled,
+      s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
+      s2LastDays: standards.s2.lastDays,
+      s2MinSimilarity: standards.s2.minSimilarity,
+      s3LastDays: standards.s3.lastDays,
+      s3ChangePct: standards.s3.changePct,
+      s3VolumeMultiple: standards.s3.volumeMultiple,
+    }
+
+    return JSON.stringify({ symbol: compareSymbol, input })
+  }, [compareSymbol, props.days, props.fqt, props.klt, standards])
 
   useEffect(() => {
     if (!request) return
@@ -47,19 +70,18 @@ export default function SimilarStocksPanel(props: {
     getSimilarStocks(request.symbol, request.input, ac.signal)
       .then((d) => {
         if (ac.signal.aborted) return
-        setData(d)
+        setSimilarLast({ key: request.key, data: d, atISO: new Date().toISOString() })
       })
       .catch((e: unknown) => {
         if (ac.signal.aborted) return
         setError(e instanceof Error ? e.message : String(e))
-        setData(null)
       })
       .finally(() => {
         if (ac.signal.aborted) return
         setLoading(false)
       })
     return () => ac.abort()
-  }, [request])
+  }, [request, setSimilarLast])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -221,23 +243,21 @@ export default function SimilarStocksPanel(props: {
               standards.s3.enabled ? 3 : null,
             ].filter((x): x is 1 | 2 | 3 => x !== null)
 
-            setData(null)
-            setRequest({
-              symbol: compareSymbol,
-              input: {
-                days: props.days,
-                top: 10,
-                klt: props.klt,
-                fqt: props.fqt,
-                enabled,
-                s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
-                s2LastDays: standards.s2.lastDays,
-                s2MinSimilarity: standards.s2.minSimilarity,
-                s3LastDays: standards.s3.lastDays,
-                s3ChangePct: standards.s3.changePct,
-                s3VolumeMultiple: standards.s3.volumeMultiple,
-              },
-            })
+            const input: SimilarInput = {
+              days: props.days,
+              top: 10,
+              klt: props.klt,
+              fqt: props.fqt,
+              enabled,
+              s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
+              s2LastDays: standards.s2.lastDays,
+              s2MinSimilarity: standards.s2.minSimilarity,
+              s3LastDays: standards.s3.lastDays,
+              s3ChangePct: standards.s3.changePct,
+              s3VolumeMultiple: standards.s3.volumeMultiple,
+            }
+            const key = JSON.stringify({ symbol: compareSymbol, input })
+            setRequest({ symbol: compareSymbol, input, key })
           }}
           className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-white"
         >
@@ -253,6 +273,10 @@ export default function SimilarStocksPanel(props: {
           </button>
         ) : null}
       </div>
+
+      {data && similarLast?.key !== currentPlannedKey ? (
+        <div className="mt-2 text-xs text-slate-500">当前参数已变更；列表为上次计算结果</div>
+      ) : null}
 
       <div className="mt-3">
         {loading ? (
