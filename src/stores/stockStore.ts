@@ -65,8 +65,8 @@ export const useStockStore = create<StockState>()(
       klineFqt: '1',
       klineLimit: 180,
       similarStandards: {
-        s1: { enabled: true, maxMarketCapYi: 150 },
-        s2: { enabled: true, lastDays: 5, minSimilarity: 0.8 },
+        s1: { enabled: false, maxMarketCapYi: 150 },
+        s2: { enabled: false, lastDays: 5, minSimilarity: 0.8 },
         s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
       },
       expandedRatioKeys: {
@@ -147,10 +147,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 11,
+      version: 12,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 11) return persisted
+        if (version >= 12) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -175,8 +175,8 @@ export const useStockStore = create<StockState>()(
           klineFqt: '1',
           klineLimit: 180,
           similarStandards: {
-            s1: { enabled: true, maxMarketCapYi: 150 },
-            s2: { enabled: true, lastDays: 5, minSimilarity: 0.8 },
+            s1: { enabled: false, maxMarketCapYi: 150 },
+            s2: { enabled: false, lastDays: 5, minSimilarity: 0.8 },
             s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
           },
         }
