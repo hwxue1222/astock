@@ -26,8 +26,18 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
     setError(null)
     getIndustryMoneyflow(ac.signal, { fenlei: 0 })
       .then((d) => setItems(d.items ?? []))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setLoading(false))
+      .catch((e: unknown) => {
+        if (ac.signal.aborted) return
+        const err = e as { name?: unknown; message?: unknown }
+        const name = typeof err?.name === 'string' ? err.name : ''
+        const msg = typeof err?.message === 'string' ? err.message : String(e)
+        if (name === 'AbortError' || msg.toLowerCase().includes('aborted')) return
+        setError(msg)
+      })
+      .finally(() => {
+        if (ac.signal.aborted) return
+        setLoading(false)
+      })
     return () => ac.abort()
   }, [])
 
@@ -88,4 +98,3 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
     </div>
   )
 }
-
