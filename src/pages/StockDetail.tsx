@@ -44,6 +44,7 @@ export default function StockDetail() {
 
   const [universe, setUniverse] = useState<StockItem[]>([])
   const [quoteName, setQuoteName] = useState<string | null>(null)
+  const [quoteIndustry, setQuoteIndustry] = useState<string | null>(null)
 
   const [events, setEvents] = useState<MajorEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -71,8 +72,14 @@ export default function StockDetail() {
     if (!routeSymbol) return
     const ac = new AbortController()
     getQuote(routeSymbol, ac.signal)
-      .then((q) => setQuoteName(q.name ? String(q.name) : null))
-      .catch(() => setQuoteName(null))
+      .then((q) => {
+        setQuoteName(q.name ? String(q.name) : null)
+        setQuoteIndustry(q.industry ? String(q.industry) : null)
+      })
+      .catch(() => {
+        setQuoteName(null)
+        setQuoteIndustry(null)
+      })
     return () => ac.abort()
   }, [routeSymbol])
 
@@ -161,6 +168,7 @@ export default function StockDetail() {
   }, [routeSymbol, universe])
 
   const displayName = selectedMeta?.name ?? quoteName
+  const displayIndustry = quoteIndustry
 
   const title = `个股详情`
 
@@ -197,6 +205,11 @@ export default function StockDetail() {
                 {routeSymbol}
                 {displayName ? (
                   <span className="text-slate-400"> · {displayName}</span>
+                ) : null}
+                {displayIndustry ? (
+                  <span className="ml-2 inline-flex max-w-40 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                    {displayIndustry}
+                  </span>
                 ) : null}
                 {selectedMeta?.exchange ? (
                   <span className="text-slate-500"> · {selectedMeta.exchange}</span>
