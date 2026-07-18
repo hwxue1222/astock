@@ -55,10 +55,10 @@ function zscore(v: number[]): number[] {
   return v.map((x) => (x - mean) / sd)
 }
 
-function buildDailyShapeFeature(input: { candles: Candle[]; lastDays: number }): number[] {
+function buildShapeFeature(input: { candles: Candle[]; lastN: number }): number[] {
   const c = input.candles
-  if (c.length < input.lastDays + 1) return []
-  const recent = c.slice(-1 * (input.lastDays + 1))
+  if (c.length < input.lastN + 1) return []
+  const recent = c.slice(-1 * (input.lastN + 1))
 
   const rets: number[] = []
   const bodies: number[] = []
@@ -328,9 +328,9 @@ export async function findSimilarStocks(input: {
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
   s2PreselectTop: number
-  s3LastDays: number
-  s3RangeRatioMin: number
-  s3RangeRatioMax: number
+  s3DailyDays: number
+  s3MonthlyMonths: number
+  s3MinSimilarity: number
 }): Promise<{ target: string; candidates: number; top: SimilarStock[]; meta: { window: number } }> {
   const target = normalizeAshareCode(input.targetSymbol)
   const top = Math.max(1, Math.min(50, input.top))
@@ -340,13 +340,14 @@ export async function findSimilarStocks(input: {
   const s2LastDays = Math.max(3, Math.min(15, input.s2LastDays))
   const s2TurnoverSpikeMultiple = Math.max(1.1, Math.min(10, input.s2TurnoverSpikeMultiple))
   const s2PreselectTop = Math.max(10, Math.min(80, input.s2PreselectTop))
-  const s3LastDays = Math.max(3, Math.min(30, input.s3LastDays))
-  const s3RangeRatioMin = Math.max(0.05, Math.min(10, input.s3RangeRatioMin))
-  const s3RangeRatioMax = Math.max(s3RangeRatioMin, Math.min(10, input.s3RangeRatioMax))
+  const s3DailyDays = Math.max(3, Math.min(20, input.s3DailyDays))
+  const s3MonthlyMonths = Math.max(6, Math.min(60, input.s3MonthlyMonths))
+  const s3MinSimilarity = Math.max(0.5, Math.min(0.99, input.s3MinSimilarity))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
-  const limit = enabled.has(2) || enabled.has(3) ? 20 : 0
-  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
+  const dailyLimit = enabled.has(2) || enabled.has(3) ? Math.max(20, Math.min(60, Math.max(s2LastDays, s3DailyDays) + 6)) : 0
+  const monthlyLimit = enabled.has(3) ? Math.max(30, Math.min(80, s3MonthlyMonths + 6)) : 0
+  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3DailyDays : 0
 
   const nameByCode = new Map<string, string>()
   const capYuanByCode = new Map<string, number>()
@@ -399,55 +400,86 @@ export async function findSimilarStocks(input: {
     return { target, candidates: candidates.length, top: out, meta: { window } }
   }
 
-  const targetCandles = enabled.has(2) || enabled.has(3)
+  const targetDailyCandles = enabled.has(2) || enabled.has(3)
     ? await getCandlesCached({
         code: target,
         klt: '101',
         fqt: '1',
-        limit,
+        limit: dailyLimit,
         ttlMs: 10 * 60 * 1000,
         timeoutMs: 6_000,
         fallbackToTencent: false,
       })
     : []
 
-  const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
-  const targetRange = enabled.has(3) ? avgRangePct({ candles: targetCandles, lastDays: s3LastDays }) : null
+  const fvTarget2 = enabled.has(2) ? buildShapeFeature({ candles: targetDailyCandles, lastN: s2LastDays }) : []
+  const fvTarget3Daily = enabled.has(3) ? buildShapeFeature({ candles: targetDailyCandles, lastN: s3DailyDays }) : []
+
+  const targetMonthlyCandles = enabled.has(3)
+    ? await getCandlesCached({
+        code: target,
+        klt: '103',
+        fqt: '1',
+        limit: monthlyLimit,
+        ttlMs: 60 * 60 * 1000,
+        timeoutMs: 8_000,
+        fallbackToTencent: false,
+      })
+    : []
+  const fvTarget3Monthly = enabled.has(3) ? buildShapeFeature({ candles: targetMonthlyCandles, lastN: s3MonthlyMonths }) : []
 
   const rows = await mapLimit(candidates, enabled.has(2) || enabled.has(3) ? 4 : 2, async (code) => {
     try {
-      const candles = await getCandlesCached({
-        code,
-        klt: '101',
-        fqt: '1',
-        limit,
-        ttlMs: 10 * 60 * 1000,
-        timeoutMs: 6_000,
-        fallbackToTencent: false,
-      })
-      if (enabled.has(3) && targetRange !== null) {
-        const r = avgRangePct({ candles, lastDays: s3LastDays })
-        if (r === null) return null
-        const ratio = r / Math.max(1e-9, targetRange)
-        if (!(ratio >= s3RangeRatioMin && ratio <= s3RangeRatioMax)) return null
-      }
+      const daily = enabled.has(2) || enabled.has(3)
+        ? await getCandlesCached({
+            code,
+            klt: '101',
+            fqt: '1',
+            limit: dailyLimit,
+            ttlMs: 10 * 60 * 1000,
+            timeoutMs: 6_000,
+            fallbackToTencent: false,
+          })
+        : []
+
+      const scores: number[] = []
 
       if (enabled.has(2)) {
-        const fv = buildDailyShapeFeature({ candles, lastDays: s2LastDays })
-        if (!fv.length || !fvTarget.length) return null
-        const s = cosine(fvTarget, fv)
-        return {
-          symbol: code,
-          name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-          score: clamp01((s + 1) / 2),
-        } satisfies SimilarStock
+        const fv = buildShapeFeature({ candles: daily, lastN: s2LastDays })
+        if (!fv.length || !fvTarget2.length) return null
+        const s = cosine(fvTarget2, fv)
+        scores.push(clamp01((s + 1) / 2))
       }
 
-      const cap = capYuanByCode.get(code) ?? 0
+      if (enabled.has(3)) {
+        const fvDaily = buildShapeFeature({ candles: daily, lastN: s3DailyDays })
+        if (!fvDaily.length || !fvTarget3Daily.length) return null
+        const sDaily = clamp01((cosine(fvTarget3Daily, fvDaily) + 1) / 2)
+
+        const monthly = await getCandlesCached({
+          code,
+          klt: '103',
+          fqt: '1',
+          limit: monthlyLimit,
+          ttlMs: 60 * 60 * 1000,
+          timeoutMs: 8_000,
+          fallbackToTencent: false,
+        })
+        const fvMonthly = buildShapeFeature({ candles: monthly, lastN: s3MonthlyMonths })
+        if (!fvMonthly.length || !fvTarget3Monthly.length) return null
+        const sMonthly = clamp01((cosine(fvTarget3Monthly, fvMonthly) + 1) / 2)
+
+        const combined = (sDaily + sMonthly) / 2
+        if (combined < s3MinSimilarity) return null
+        scores.push(combined)
+      }
+
+      if (!scores.length) return null
+      const score = scores.reduce((a, b) => a + b, 0) / scores.length
       return {
         symbol: code,
         name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-        score: clamp01(cap / Math.max(1, capLimitYuan)),
+        score: clamp01(score),
       } satisfies SimilarStock
     } catch {
       return null

@@ -11,7 +11,7 @@ import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getTencentKline } from '../providers/tencentKline.js'
-import { findSimilarStocks } from '../domain/similarity.js'
+import { findSimilarStocks } from '../domain/similarity.ts'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
@@ -386,9 +386,9 @@ router.get(
     const s2LastDays = Number(req.query.s2LastDays ?? 5)
     const s2TurnoverSpikeMultiple = Number(req.query.s2TurnoverSpikeMultiple ?? 2)
     const s2PreselectTop = Number(req.query.s2PreselectTop ?? 30)
-    const s3LastDays = Number(req.query.s3LastDays ?? 5)
-    const s3RangeRatioMin = Number(req.query.s3RangeRatioMin ?? 0.5)
-    const s3RangeRatioMax = Number(req.query.s3RangeRatioMax ?? 2)
+    const s3DailyDays = Number(req.query.s3DailyDays ?? 5)
+    const s3MonthlyMonths = Number(req.query.s3MonthlyMonths ?? 24)
+    const s3MinSimilarity = Number(req.query.s3MinSimilarity ?? 0.8)
 
     const candRaw = String(req.query.candidates ?? '').trim()
     const candidates = candRaw
@@ -412,9 +412,9 @@ router.get(
         s2LastDays: Number.isFinite(s2LastDays) ? s2LastDays : 5,
         s2TurnoverSpikeMultiple: Number.isFinite(s2TurnoverSpikeMultiple) ? s2TurnoverSpikeMultiple : 2,
         s2PreselectTop: Number.isFinite(s2PreselectTop) ? s2PreselectTop : 30,
-        s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
-        s3RangeRatioMin: Number.isFinite(s3RangeRatioMin) ? s3RangeRatioMin : 0.5,
-        s3RangeRatioMax: Number.isFinite(s3RangeRatioMax) ? s3RangeRatioMax : 2,
+        s3DailyDays: Number.isFinite(s3DailyDays) ? s3DailyDays : 5,
+        s3MonthlyMonths: Number.isFinite(s3MonthlyMonths) ? s3MonthlyMonths : 24,
+        s3MinSimilarity: Number.isFinite(s3MinSimilarity) ? s3MinSimilarity : 0.8,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
     } catch (e: unknown) {

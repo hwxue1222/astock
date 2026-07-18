@@ -59,9 +59,9 @@ export default function SimilarStocksPanel(props: {
         s2LastDays: standards.s2.lastDays,
         s2TurnoverSpikeMultiple: standards.s2.turnoverSpikeMultiple,
         s2PreselectTop: standards.s2.preselectTop,
-        s3LastDays: standards.s3.lastDays,
-        s3RangeRatioMin: standards.s3.rangeRatioMin,
-        s3RangeRatioMax: standards.s3.rangeRatioMax,
+        s3DailyDays: standards.s3.dailyDays,
+        s3MonthlyMonths: standards.s3.monthlyMonths,
+        s3MinSimilarity: standards.s3.minSimilarity,
       },
       ac.signal,
     )
@@ -161,39 +161,44 @@ export default function SimilarStocksPanel(props: {
             />
             标准2
           </label>
-          <div className="text-xs text-slate-400">近</div>
+          <div className="text-xs text-slate-400">与</div>
+          <div className="text-xs font-semibold text-slate-100">{props.targetSymbol}</div>
+          <div className="text-xs text-slate-400">股票 K 线形态近似 ≥</div>
           <input
             type="number"
-            value={standards.s3.lastDays}
-            min={3}
-            max={30}
+            value={Math.round(standards.s3.minSimilarity * 100)}
+            min={50}
+            max={99}
             step={1}
-            onChange={(e) => setStandard('s3', { lastDays: Number(e.target.value) })}
+            onChange={(e) => setStandard('s3', { minSimilarity: Number(e.target.value) / 100 })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">日波动比(候选/标准) ∈</div>
+          <div className="text-xs text-slate-400">%（近</div>
           <input
             type="number"
-            value={standards.s3.rangeRatioMin}
-            min={0.1}
-            step={0.1}
-            onChange={(e) => setStandard('s3', { rangeRatioMin: Number(e.target.value) })}
+            value={standards.s3.monthlyMonths}
+            min={6}
+            max={60}
+            step={1}
+            onChange={(e) => setStandard('s3', { monthlyMonths: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">~</div>
+          <div className="text-xs text-slate-400">个月月线 + 近</div>
           <input
             type="number"
-            value={standards.s3.rangeRatioMax}
-            min={0.1}
-            step={0.1}
-            onChange={(e) => setStandard('s3', { rangeRatioMax: Number(e.target.value) })}
+            value={standards.s3.dailyDays}
+            min={3}
+            max={20}
+            step={1}
+            onChange={(e) => setStandard('s3', { dailyDays: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
+          <div className="text-xs text-slate-400">日日线）</div>
         </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        标准1/2=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
+        标准1=近N日形态相似+换手率突增；标准2=月线(近N个月)+日线(近N日)综合相似度阈值 · 候选范围：全市场（失败时回退最近缓存）
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
