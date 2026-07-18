@@ -9,7 +9,6 @@ import type {
   StockKlineResponse,
   StockRatiosResponse,
   ThsClassicStatsResponse,
-  ThsClassicArticleStocksResponse,
 } from '@/types/stock'
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -145,20 +144,5 @@ export async function getRumors(
 
 export async function getThsClassicStats(signal?: AbortSignal): Promise<ThsClassicStatsResponse> {
   const data = await fetchJson<{ success: boolean } & ThsClassicStatsResponse>('/api/stocks/ths-classic', signal)
-  return data
-}
-
-export async function getThsClassicArticleStocks(
-  url: string,
-  input?: { limit?: number },
-  signal?: AbortSignal,
-): Promise<ThsClassicArticleStocksResponse> {
-  const q = new URLSearchParams()
-  q.set('url', url)
-  if (typeof input?.limit === 'number') q.set('limit', String(input.limit))
-  const data = await fetchJson<{ success: boolean } & ThsClassicArticleStocksResponse>(
-    `/api/stocks/ths-classic/stocks?${q.toString()}`,
-    signal,
-  )
   return data
 }

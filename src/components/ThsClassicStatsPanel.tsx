@@ -1,7 +1,4 @@
 import { ExternalLink, RefreshCcw } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { getThsClassicArticleStocks } from '@/lib/stockApi'
-import { useStockStore } from '@/stores/stockStore'
 import type { ThsClassicStatsResponse } from '@/types/stock'
 
 export default function ThsClassicStatsPanel(props: {
@@ -10,13 +7,6 @@ export default function ThsClassicStatsPanel(props: {
   error: string | null
   onRefresh: () => void
 }): JSX.Element {
-  const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
-  const [extractingRank, setExtractingRank] = useState<1 | 2 | 3 | null>(null)
-  const [addedByRank, setAddedByRank] = useState<Record<number, string[]>>({})
-
-  const existing = useStockStore((s) => s.watchlist)
-  const watchlistSet = useMemo(() => new Set(existing.map((x) => String(x).toUpperCase())), [existing])
-
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -79,42 +69,9 @@ export default function ThsClassicStatsPanel(props: {
                       {it.articleTimeText ? ` · 文章时间：${it.articleTimeText}` : ''}
                       {it.articleSourceText ? ` · ${it.articleSourceText}` : ''}
                     </div>
-
-                    {addedByRank[it.rank]?.length ? (
-                      <div className="mt-1 text-xs text-slate-500">
-                        已加入自选：{addedByRank[it.rank].join('、')}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <div className="text-xs text-slate-400">{it.timeText}</div>
-                  {it.url ? (
-                    <button
-                      type="button"
-                      disabled={extractingRank === it.rank}
-                      onClick={async () => {
-                        setExtractingRank(it.rank)
-                        try {
-                          const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
-                          const codes = (res.codes ?? [])
-                            .map((x) => String(x).toUpperCase())
-                            .filter((x) => /^\d{6}$/.test(x))
-                          const newOnes = codes.filter((c) => !watchlistSet.has(c))
-                          if (newOnes.length) addManyToWatchlist(newOnes)
-                          setAddedByRank((m) => ({ ...m, [it.rank]: codes }))
-                        } catch {
-                          setAddedByRank((m) => ({ ...m, [it.rank]: [] }))
-                        } finally {
-                          setExtractingRank(null)
-                        }
-                      }}
-                      className="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                    >
-                      {extractingRank === it.rank ? '提取中…' : '加入自选(10股)'}
-                    </button>
-                  ) : null}
-                </div>
+                <div className="shrink-0 text-xs text-slate-400">{it.timeText}</div>
               </div>
             ))}
           </div>
@@ -125,3 +82,4 @@ export default function ThsClassicStatsPanel(props: {
     </div>
   )
 }
+
