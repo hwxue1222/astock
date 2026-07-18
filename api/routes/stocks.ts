@@ -11,7 +11,7 @@ import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getTencentKline } from '../providers/tencentKline.js'
-import { findSimilarStocks } from '../domain/similarity.ts'
+import { findSimilarStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
