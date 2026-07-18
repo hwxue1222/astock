@@ -79,7 +79,7 @@ export default function SimilarStocksPanel(props: {
     ].filter((x): x is 1 | 2 | 3 => x !== null)
 
     if (mode === 'kline' && !enabled.includes(2) && !enabled.includes(3)) {
-      setError('请至少勾选“标准2”或“标准3”')
+      setError('请至少勾选“标准1”或“标准2”')
       setData(null)
       setLoading(false)
       return () => ac.abort()
@@ -127,10 +127,7 @@ export default function SimilarStocksPanel(props: {
         {showStandardControls ? (
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-200">
-                <input type="checkbox" checked readOnly />
-                标准1（标准股）
-              </label>
+              <div className="text-xs font-semibold text-slate-200">标准股</div>
 
               {props.onAddToWatchlist ? (
                 standardInWatchlist ? (
@@ -220,7 +217,7 @@ export default function SimilarStocksPanel(props: {
               checked={standards.s2.enabled}
               onChange={(e) => setStandard('s2', { enabled: e.target.checked })}
             />
-            标准2
+            标准1
           </label>
           <div className="text-xs text-slate-400">近</div>
           <input
@@ -261,7 +258,7 @@ export default function SimilarStocksPanel(props: {
               checked={standards.s3.enabled}
               onChange={(e) => setStandard('s3', { enabled: e.target.checked })}
             />
-            标准3
+            标准2
           </label>
           <div className="text-xs text-slate-400">近</div>
           <input
@@ -295,7 +292,7 @@ export default function SimilarStocksPanel(props: {
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        标准1=标准股；标准2/3=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
+        标准股用于对比；标准1/2=K线形态过滤与打分（看K线形态选股，不看财务数据） · 候选范围：全市场（失败时回退最近缓存）
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
