@@ -70,7 +70,8 @@ export async function getSinaIndustryMoneyflow(input?: {
     })
     .filter((x): x is SinaIndustryMoneyflowItem => x !== null)
 
+  items.sort((a, b) => b.netInflowRate - a.netInflowRate)
+
   await writeJsonCache(cachePath, items)
   return items.slice(0, limit)
 }
-
