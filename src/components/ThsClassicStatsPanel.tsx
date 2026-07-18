@@ -1,12 +1,27 @@
 import { ExternalLink, RefreshCcw } from 'lucide-react'
-import type { ThsClassicStatsResponse } from '@/types/stock'
+import { useMemo, useState } from 'react'
+import { getThsClassicArticleStocks } from '@/lib/stockApi'
+import { useStockStore } from '@/stores/stockStore'
+import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
 export default function ThsClassicStatsPanel(props: {
   data: ThsClassicStatsResponse | null
+  universe: StockItem[]
   loading: boolean
   error: string | null
   onRefresh: () => void
 }): JSX.Element {
+  const addToWatchlist = useStockStore((s) => s.addToWatchlist)
+  const watchlist = useStockStore((s) => s.watchlist)
+  const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
+
+  const nameByCode = useMemo(() => {
+    return new Map(props.universe.map((x) => [String(x.symbol).toUpperCase(), String(x.name ?? '').trim()]))
+  }, [props.universe])
+
+  const [loadingByRank, setLoadingByRank] = useState<Record<number, boolean>>({})
+  const [codesByRank, setCodesByRank] = useState<Record<number, string[]>>({})
+  const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="flex items-start justify-between gap-3">
@@ -69,9 +84,75 @@ export default function ThsClassicStatsPanel(props: {
                       {it.articleTimeText ? ` · 文章时间：${it.articleTimeText}` : ''}
                       {it.articleSourceText ? ` · ${it.articleSourceText}` : ''}
                     </div>
+
+                    <div className="mt-2">
+                      {loadingByRank[it.rank] ? <div className="text-xs text-slate-500">解析中…</div> : null}
+                      {errorByRank[it.rank] ? (
+                        <div className="text-xs text-red-200">解析失败：{errorByRank[it.rank]}</div>
+                      ) : null}
+                      {codesByRank[it.rank]?.length ? (
+                        <div className="mt-2 space-y-1">
+                          {codesByRank[it.rank].map((code) => {
+                            const already = watchlistSet.has(code)
+                            const name = nameByCode.get(code)
+                            return (
+                              <div key={code} className="flex items-center justify-between gap-2">
+                                <div className="min-w-0 text-xs text-slate-200">
+                                  <span className="font-semibold">{code}</span>
+                                  {name ? <span className="text-slate-400"> · {name}</span> : null}
+                                </div>
+                                {already ? (
+                                  <div className="shrink-0 text-xs text-slate-500">已在自选</div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => addToWatchlist(code)}
+                                    className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                                  >
+                                    加入自选
+                                  </button>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-500">未解析</div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="shrink-0 text-xs text-slate-400">{it.timeText}</div>
+                <div className="shrink-0 text-right">
+                  <div className="text-xs text-slate-400">{it.timeText}</div>
+                  {it.url ? (
+                    <button
+                      type="button"
+                      disabled={loadingByRank[it.rank]}
+                      onClick={async () => {
+                        setLoadingByRank((m) => ({ ...m, [it.rank]: true }))
+                        setErrorByRank((m) => {
+                          const next = { ...m }
+                          delete next[it.rank]
+                          return next
+                        })
+                        try {
+                          const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
+                          const codes = (res.codes ?? [])
+                            .map((x) => String(x).toUpperCase())
+                            .filter((x) => /^\d{6}$/.test(x))
+                          setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
+                        } catch (e: unknown) {
+                          setErrorByRank((m) => ({ ...m, [it.rank]: e instanceof Error ? e.message : String(e) }))
+                        } finally {
+                          setLoadingByRank((m) => ({ ...m, [it.rank]: false }))
+                        }
+                      }}
+                      className="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {loadingByRank[it.rank] ? '解析中…' : codesByRank[it.rank]?.length ? '重新解析' : '解析(10股)'}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
@@ -82,4 +163,3 @@ export default function ThsClassicStatsPanel(props: {
     </div>
   )
 }
-

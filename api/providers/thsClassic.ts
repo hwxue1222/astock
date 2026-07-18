@@ -66,6 +66,11 @@ export type ThsClassicStats = {
   items: ThsClassicStatItem[]
 }
 
+export type ThsClassicArticleStocks = {
+  url: string
+  codes: string[]
+}
+
 function stripTags(s: string): string {
   return String(s)
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -73,6 +78,28 @@ function stripTags(s: string): string {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function pickAshareCodesFromText(input: string, limit = 30): string[] {
+  const text = String(input ?? '')
+  const matches = text.match(/\b\d{6}\b/g) ?? []
+  const out: string[] = []
+  for (const m of matches) {
+    if (!/^\d{6}$/.test(m)) continue
+    if (!out.includes(m)) out.push(m)
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function isAllowedThsUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.toLowerCase()
+    return host.endsWith('10jqka.com.cn')
+  } catch {
+    return false
+  }
 }
 
 function normalizeUrl(href: string, base: string): string {
@@ -203,6 +230,50 @@ export async function getThsClassicStats(input?: {
     await enrichItemMeta(parsed.items, Math.max(6_000, Math.floor((input?.timeoutMs ?? 12_000) * 0.8)))
   }
   const out: ThsClassicStats = { ...parsed, fetchedAtISO: new Date().toISOString() }
-  if (out.items.length) await writeJsonCache(cachePath, out)
+  if (out.items.length) {
+    try {
+      await writeJsonCache(cachePath, out)
+    } catch {
+      void 0
+    }
+  }
+  return out
+}
+
+export async function getThsClassicArticleStocks(input: {
+  url: string
+  limit?: number
+  ttlSeconds?: number
+  timeoutMs?: number
+}): Promise<ThsClassicArticleStocks> {
+  const url = String(input.url ?? '').trim()
+  if (!url) throw new Error('Missing url')
+  if (!isAllowedThsUrl(url)) throw new Error('Unsupported url')
+
+  const lim = Math.max(1, Math.min(50, input.limit ?? 10))
+  const cachePath = path.join(process.cwd(), '.cache', `ths_classic_article_${Buffer.from(url).toString('hex')}.json`)
+  const ttlSeconds = input.ttlSeconds ?? 30 * 60
+  const cached = await readJsonCache<ThsClassicArticleStocks>(cachePath, { ttlSeconds })
+  if (cached?.codes?.length) return { url, codes: cached.codes.slice(0, lim) }
+
+  const html = await fetchHtmlDecoded(url, {
+    timeoutMs: input.timeoutMs ?? 12_000,
+    headers: {
+      referer: 'https://www.10jqka.com.cn/classic/',
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'accept-language': 'zh-CN,zh;q=0.9,en;q=0.6',
+    },
+  })
+
+  const plain = stripTags(html)
+  const codes = pickAshareCodesFromText(plain, 80).slice(0, lim)
+  const out: ThsClassicArticleStocks = { url, codes }
+  if (codes.length) {
+    try {
+      await writeJsonCache(cachePath, out)
+    } catch {
+      void 0
+    }
+  }
   return out
 }

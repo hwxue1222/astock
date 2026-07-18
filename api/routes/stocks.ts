@@ -14,7 +14,7 @@ import { getTencentKline } from '../providers/tencentKline.js'
 import { findSimilarStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
-import { getThsClassicStats } from '../providers/thsClassic.js'
+import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
 
 const router = Router()
 
@@ -88,6 +88,26 @@ router.get('/ths-classic', async (req: Request, res: Response): Promise<void> =>
     res.status(502).json({
       success: false,
       error: 'THS classic unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/ths-classic/stocks', async (req: Request, res: Response): Promise<void> => {
+  const url = String(req.query.url ?? '').trim()
+  const limit = Number(req.query.limit ?? 10)
+  try {
+    const out = await getThsClassicArticleStocks({
+      url,
+      limit: Number.isFinite(limit) ? limit : 10,
+      ttlSeconds: 30 * 60,
+      timeoutMs: 12_000,
+    })
+    res.status(200).json({ success: true, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'THS classic article unavailable (real data required)',
       detail: errorMessage(e),
     })
   }
