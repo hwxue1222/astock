@@ -10,31 +10,33 @@ export async function fetchText(
   const ac = new AbortController()
   const t = setTimeout(() => ac.abort(), input?.timeoutMs ?? 15_000)
   try {
+    const headers = {
+      'user-agent': 'Mozilla/5.0',
+      ...(input?.headers ?? {}),
+    }
     try {
-      const res = await fetch(url, {
-        signal: ac.signal,
-        headers: {
-          'user-agent': 'Mozilla/5.0',
-          ...(input?.headers ?? {}),
-        },
-      })
+      const res = await fetch(url, { signal: ac.signal, headers })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return await res.text()
     } catch (e: unknown) {
-      const allow = String(process.env.ALLOW_CURL_FALLBACK ?? '1').toLowerCase()
-      if (!(allow === '1' || allow === 'true' || allow === 'yes')) throw e
-      const timeoutSeconds = Math.max(5, Math.ceil((input?.timeoutMs ?? 15_000) / 1000))
-      const headers = {
-        'user-agent': 'Mozilla/5.0',
-        ...(input?.headers ?? {}),
+      try {
+        const res = await fetch(`https://r.jina.ai/${url}`, { signal: ac.signal, headers })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return await res.text()
+      } catch {
+        const allow = String(process.env.ALLOW_CURL_FALLBACK ?? '1').toLowerCase()
+        const isVercel = String(process.env.VERCEL ?? '').length > 0
+        if (isVercel) throw e
+        if (!(allow === '1' || allow === 'true' || allow === 'yes')) throw e
+        const timeoutSeconds = Math.max(5, Math.ceil((input?.timeoutMs ?? 15_000) / 1000))
+        const args = ['-L', '--max-time', String(timeoutSeconds)]
+        for (const [k, v] of Object.entries(headers)) {
+          args.push('-H', `${k}: ${v}`)
+        }
+        args.push(url)
+        const out = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 })
+        return out.stdout
       }
-      const args = ['-L', '--max-time', String(timeoutSeconds)]
-      for (const [k, v] of Object.entries(headers)) {
-        args.push('-H', `${k}: ${v}`)
-      }
-      args.push(url)
-      const out = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 })
-      return out.stdout
     }
   } finally {
     clearTimeout(t)

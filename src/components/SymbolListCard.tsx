@@ -27,7 +27,7 @@ export default function SymbolListCard(props: {
   const [klineBySymbol, setKlineBySymbol] = useState<Record<string, StockKlineResponse>>({})
   const [ratiosBySymbol, setRatiosBySymbol] = useState<Record<string, StockRatiosResponse>>({})
   const [quoteBySymbol, setQuoteBySymbol] = useState<
-    Record<string, { marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
+    Record<string, { name?: string; marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
   >({})
 
   const bySymbol = useMemo(() => {
@@ -58,7 +58,7 @@ export default function SymbolListCard(props: {
           if (q)
             setQuoteBySymbol((m) => ({
               ...m,
-              [sym]: { marketCapYuan: q.marketCapYuan, floatMarketCapYuan: q.floatMarketCapYuan, pe: q.pe },
+              [sym]: { name: q.name, marketCapYuan: q.marketCapYuan, floatMarketCapYuan: q.floatMarketCapYuan, pe: q.pe },
             }))
           if (r) setRatiosBySymbol((m) => ({ ...m, [sym]: r }))
           if (k) setKlineBySymbol((m) => ({ ...m, [sym]: k }))
@@ -145,7 +145,7 @@ export default function SymbolListCard(props: {
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="truncate text-sm font-semibold text-slate-100">{symbol}</div>
-                  <div className="truncate text-xs text-slate-400">{meta?.name ?? '—'}</div>
+                  <div className="truncate text-xs text-slate-400">{meta?.name ?? quoteBySymbol[symbol]?.name ?? '—'}</div>
 
                   {props.showBasics ? (
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">

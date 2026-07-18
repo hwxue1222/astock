@@ -304,6 +304,7 @@ export async function findSimilarStocks(input: {
   s2TurnoverSpikeMultiple: number
   s2PreselectTop: number
   s2MinSimilarity?: number
+  s3LastDays?: number
   s3ChangePct?: number
   s3VolumeMultiple?: number
 }): Promise<{ target: string; candidates: number; top: SimilarStock[]; meta: { window: number } }> {
@@ -316,12 +317,13 @@ export async function findSimilarStocks(input: {
   const s2MinSimilarity = Math.max(0, Math.min(1, input.s2MinSimilarity ?? 0))
   void input.s2TurnoverSpikeMultiple
   void input.s2PreselectTop
+  const s3LastDays = Math.max(1, Math.min(10, input.s3LastDays ?? 5))
   const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
-  const limit = enabled.has(2) || enabled.has(3) ? 20 : 0
-  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? 2 : 0
+  const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
+  const limit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
   const klineFqt = enabled.has(3) ? '0' : '1'
 
   const nameByCode = new Map<string, string>()
@@ -342,7 +344,7 @@ export async function findSimilarStocks(input: {
           capYuanByCode.set(it.code, it.marketCapYuan)
         }
         candidates = out.items
-          .filter((it) => typeof it.pctChg === 'number' && it.pctChg + 0.02 >= s3ChangePct)
+          .filter((it) => (s3LastDays <= 1 ? typeof it.pctChg === 'number' && it.pctChg + 0.02 >= s3ChangePct : true))
           .map((it) => it.code)
           .slice(0, maxCandidates)
       } catch {
@@ -409,6 +411,19 @@ export async function findSimilarStocks(input: {
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
   void targetCandles
 
+  const passStd3 = (candles: Candle[]): boolean => {
+    const xs = candles.slice(-1 * (s3LastDays + 1))
+    if (xs.length < 2) return false
+    for (let i = 1; i < xs.length; i += 1) {
+      const prev = xs[i - 1]
+      const cur = xs[i]
+      const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
+      const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
+      if (changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple) return true
+    }
+    return false
+  }
+
   if (enabled.has(3) && !enabled.has(2)) {
     const want = top
     const picked: Array<SimilarStock & { idx: number }> = []
@@ -432,13 +447,7 @@ export async function findSimilarStocks(input: {
             timeoutMs: 12_000,
             fallbackToTencent: true,
           })
-          const xs = candles.slice(-2)
-          if (xs.length < 2) continue
-          const prev = xs[0]
-          const cur = xs[1]
-          const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
-          const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
-          if (!(changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple)) continue
+          if (!passStd3(candles)) continue
 
           if (pickedSet.has(code)) continue
           pickedSet.add(code)
@@ -474,13 +483,7 @@ export async function findSimilarStocks(input: {
         fallbackToTencent: true,
       })
       if (enabled.has(3)) {
-        const xs = candles.slice(-2)
-        if (xs.length < 2) return null
-        const prev = xs[0]
-        const cur = xs[1]
-        const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
-        const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
-        if (!(changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple)) return null
+        if (!passStd3(candles)) return null
       }
 
       if (enabled.has(2)) {

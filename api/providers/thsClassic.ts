@@ -1,5 +1,4 @@
-import path from 'node:path'
-import { readJsonCache, writeJsonCache } from './fsCache.js'
+import { cacheFilePath, readJsonCache, writeJsonCache } from './fsCache.js'
 import { fetchText } from './http.js'
 
 async function fetchHtmlDecoded(url: string, input?: { timeoutMs?: number; headers?: Record<string, string> }): Promise<string> {
@@ -198,7 +197,7 @@ export async function getThsClassicStats(input?: {
   ttlSeconds?: number
   timeoutMs?: number
 }): Promise<ThsClassicStats> {
-  const cachePath = path.join(process.cwd(), '.cache', 'ths_classic_stats.json')
+  const cachePath = cacheFilePath('ths_classic_stats.json')
   const ttlSeconds = input?.ttlSeconds ?? 5 * 60
   const cached = await readJsonCache<ThsClassicStats>(cachePath, { ttlSeconds })
   if (cached?.items?.length) return cached
@@ -254,7 +253,7 @@ export async function getThsClassicArticleStocks(input: {
   if (!isAllowedThsUrl(url)) throw new Error('Unsupported url')
 
   const lim = Math.max(1, Math.min(50, input.limit ?? 10))
-  const cachePath = path.join(process.cwd(), '.cache', `ths_classic_article_${Buffer.from(url).toString('hex')}.json`)
+  const cachePath = cacheFilePath(`ths_classic_article_${Buffer.from(url).toString('hex')}.json`)
   const ttlSeconds = input.ttlSeconds ?? 30 * 60
   const cached = await readJsonCache<ThsClassicArticleStocks>(cachePath, { ttlSeconds })
   if (cached?.codes?.length) return { url, codes: cached.codes.slice(0, lim) }

@@ -3,6 +3,11 @@ import path from 'node:path'
 
 const MAX_CACHE_AGE_SECONDS = 3 * 24 * 3600
 
+export function cacheFilePath(fileName: string): string {
+  const base = String(process.env.VERCEL ?? '').length > 0 ? path.join('/tmp', 'stock-risk-dashboard-cache') : path.join(process.cwd(), '.cache')
+  return path.join(base, fileName)
+}
+
 export async function readJsonCache<T>(
   filePath: string,
   input: { ttlSeconds: number },

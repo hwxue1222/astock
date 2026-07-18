@@ -1,5 +1,4 @@
-import path from 'node:path'
-import { readJsonCache, writeJsonCache } from './fsCache.js'
+import { cacheFilePath, readJsonCache, writeJsonCache } from './fsCache.js'
 import { fetchText } from './http.js'
 
 export type GubaPost = {
@@ -62,7 +61,7 @@ export async function getEastmoneyGubaPosts(input: {
   const pages = Math.max(1, Math.min(3, input.pages ?? 2))
   const ttlSeconds = Math.max(10, Math.min(3600, input.ttlSeconds ?? 180))
 
-  const cachePath = path.join(process.cwd(), '.cache', `guba_${input.code}.json`)
+  const cachePath = cacheFilePath(`guba_${input.code}.json`)
   const cached = await readJsonCache<GubaPost[]>(cachePath, { ttlSeconds })
   if (cached?.length) return cached.slice(0, limit)
 

@@ -168,6 +168,7 @@ export interface ThsClassicArticleStocksResponse {
 
 export interface StockQuoteResponse {
   symbol: string
+  name?: string
   marketCapYuan?: number
   floatMarketCapYuan?: number
   pe?: number

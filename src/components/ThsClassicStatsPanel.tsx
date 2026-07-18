@@ -24,7 +24,7 @@ export default function ThsClassicStatsPanel(props: {
   const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
 
   const [quoteByCode, setQuoteByCode] = useState<
-    Record<string, { marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
+    Record<string, { name?: string; marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
   >({})
   const [fieldsByCode, setFieldsByCode] = useState<
     Record<string, { cash?: number; totalAssets?: number; netAssets?: number }>
@@ -206,6 +206,7 @@ export default function ThsClassicStatsPanel(props: {
                                 setQuoteByCode((m) => ({
                                   ...m,
                                   [code]: {
+                                    name: q.name,
                                     marketCapYuan: q.marketCapYuan,
                                     floatMarketCapYuan: q.floatMarketCapYuan,
                                     pe: q.pe,

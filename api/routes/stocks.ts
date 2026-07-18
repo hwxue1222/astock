@@ -403,6 +403,7 @@ router.get(
     const s2TurnoverSpikeMultiple = Number(req.query.s2TurnoverSpikeMultiple ?? 2)
     const s2PreselectTop = Number(req.query.s2PreselectTop ?? 30)
     const s2MinSimilarity = Number(req.query.s2MinSimilarity ?? 0)
+    const s3LastDays = Number(req.query.s3LastDays ?? 5)
     const s3ChangePct = Number(req.query.s3ChangePct ?? 9.98)
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
 
@@ -429,6 +430,7 @@ router.get(
         s2TurnoverSpikeMultiple: Number.isFinite(s2TurnoverSpikeMultiple) ? s2TurnoverSpikeMultiple : 2,
         s2PreselectTop: Number.isFinite(s2PreselectTop) ? s2PreselectTop : 30,
         s2MinSimilarity: Number.isFinite(s2MinSimilarity) ? s2MinSimilarity : 0,
+        s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
         s3ChangePct: Number.isFinite(s3ChangePct) ? s3ChangePct : 9.98,
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
       })

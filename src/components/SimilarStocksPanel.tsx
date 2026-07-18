@@ -163,7 +163,18 @@ export default function SimilarStocksPanel(props: {
             />
             标准3
           </label>
-          <div className="text-xs text-slate-400">最近1日涨跌幅 ≥</div>
+          <div className="text-xs text-slate-400">最近</div>
+          <input
+            inputMode="numeric"
+            value={String(standards.s3.lastDays)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const v = raw ? Math.max(1, Math.min(10, Number(raw))) : 1
+              setStandard('s3', { lastDays: v })
+            }}
+            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <div className="text-xs text-slate-400">日内任一天涨跌幅 ≥</div>
           <input
             inputMode="decimal"
             value={String(standards.s3.changePct)}
@@ -222,6 +233,7 @@ export default function SimilarStocksPanel(props: {
                 s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
                 s2LastDays: standards.s2.lastDays,
                 s2MinSimilarity: standards.s2.minSimilarity,
+                s3LastDays: standards.s3.lastDays,
                 s3ChangePct: standards.s3.changePct,
                 s3VolumeMultiple: standards.s3.volumeMultiple,
               },
