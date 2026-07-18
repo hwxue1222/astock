@@ -90,7 +90,6 @@ export default function Home() {
         <div className="space-y-4">
           <ThsClassicStatsPanel
             data={ths}
-            universe={universe}
             loading={thsLoading}
             error={thsError}
             onRefresh={() => {

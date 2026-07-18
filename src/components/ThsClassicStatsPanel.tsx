@@ -1,58 +1,21 @@
 import { ExternalLink, RefreshCcw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getThsClassicArticleStocks } from '@/lib/stockApi'
-import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
+import { useStockStore } from '@/stores/stockStore'
+import type { ThsClassicStatsResponse } from '@/types/stock'
 
 export default function ThsClassicStatsPanel(props: {
   data: ThsClassicStatsResponse | null
-  universe?: StockItem[]
   loading: boolean
   error: string | null
   onRefresh: () => void
 }): JSX.Element {
-  const [loadingByRank, setLoadingByRank] = useState<Record<number, boolean>>({})
-  const [codesByRank, setCodesByRank] = useState<Record<number, string[]>>({})
-  const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
+  const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
+  const [extractingRank, setExtractingRank] = useState<1 | 2 | 3 | null>(null)
+  const [addedByRank, setAddedByRank] = useState<Record<number, string[]>>({})
 
-  const nameByCode = useMemo(() => {
-    const u = props.universe ?? []
-    return new Map(u.map((x) => [String(x.symbol).toUpperCase(), String(x.name ?? '').trim()]))
-  }, [props.universe])
-
-  useEffect(() => {
-    const items = props.data?.items?.slice(0, 3) ?? []
-    if (!items.length) return
-    const ac = new AbortController()
-
-    void (async () => {
-      for (const it of items) {
-        if (ac.signal.aborted) return
-        if (!it.url) continue
-        if (codesByRank[it.rank]?.length) continue
-        if (loadingByRank[it.rank]) continue
-        setLoadingByRank((m) => ({ ...m, [it.rank]: true }))
-        setErrorByRank((m) => {
-          const next = { ...m }
-          delete next[it.rank]
-          return next
-        })
-
-        try {
-          const res = await getThsClassicArticleStocks(it.url, { limit: 10 }, ac.signal)
-          const codes = (res.codes ?? [])
-            .map((x) => String(x).toUpperCase())
-            .filter((x) => /^\d{6}$/.test(x))
-          setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
-        } catch (e: unknown) {
-          setErrorByRank((m) => ({ ...m, [it.rank]: e instanceof Error ? e.message : String(e) }))
-        } finally {
-          setLoadingByRank((m) => ({ ...m, [it.rank]: false }))
-        }
-      }
-    })()
-
-    return () => ac.abort()
-  }, [props.data, codesByRank, loadingByRank])
+  const existing = useStockStore((s) => s.watchlist)
+  const watchlistSet = useMemo(() => new Set(existing.map((x) => String(x).toUpperCase())), [existing])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -121,30 +84,37 @@ export default function ThsClassicStatsPanel(props: {
                         {it.articleTimeText ? ` · 文章时间：${it.articleTimeText}` : ''}
                         {it.articleSourceText ? ` · ${it.articleSourceText}` : ''}
                       </div>
-
-                      <div className="mt-2">
-                        {loadingByRank[it.rank] ? (
-                          <div className="text-xs text-slate-500">正在解析股票清单…</div>
-                        ) : errorByRank[it.rank] ? (
-                          <div className="text-xs text-red-200">解析失败：{errorByRank[it.rank]}</div>
-                        ) : codesByRank[it.rank]?.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {codesByRank[it.rank].map((code) => (
-                              <div
-                                key={code}
-                                className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                              >
-                                {code}
-                                {nameByCode.get(code) ? <span className="text-slate-400"> · {nameByCode.get(code)}</span> : null}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-slate-500">暂无股票清单</div>
-                        )}
-                      </div>
+                      {addedByRank[it.rank]?.length ? (
+                        <div className="mt-2 text-xs text-slate-500">已加入自选：{addedByRank[it.rank].join('、')}</div>
+                      ) : null}
                     </div>
                   </div>
+
+                  {it.url ? (
+                    <button
+                      type="button"
+                      disabled={extractingRank === it.rank}
+                      onClick={async () => {
+                        setExtractingRank(it.rank)
+                        try {
+                          const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
+                          const codes = (res.codes ?? [])
+                            .map((x) => String(x).toUpperCase())
+                            .filter((x) => /^\d{6}$/.test(x))
+                          const newOnes = codes.filter((c) => !watchlistSet.has(c))
+                          if (newOnes.length) addManyToWatchlist(newOnes)
+                          setAddedByRank((m) => ({ ...m, [it.rank]: codes }))
+                        } catch {
+                          setAddedByRank((m) => ({ ...m, [it.rank]: [] }))
+                        } finally {
+                          setExtractingRank(null)
+                        }
+                      }}
+                      className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {extractingRank === it.rank ? '提取中…' : '加入自选(10股)'}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
