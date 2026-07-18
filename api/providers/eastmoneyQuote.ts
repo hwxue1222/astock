@@ -1,4 +1,4 @@
-import { fetchJson } from './http.js'
+import { fetchJson, fetchText } from './http.js'
 
 type EastmoneyStockGetResponse = {
   data?: {
@@ -9,6 +9,15 @@ type EastmoneyStockGetResponse = {
     f9?: number
     f162?: number
   }
+}
+
+function parseLooseJson<T>(text: string): T {
+  const s = String(text ?? '')
+  const i = s.indexOf('{')
+  const j = s.lastIndexOf('}')
+  if (i < 0 || j < 0 || j <= i) throw new Error('Invalid JSON payload')
+  const raw = s.slice(i, j + 1)
+  return JSON.parse(raw) as T
 }
 
 function guessSecid(code: string): string {
@@ -26,12 +35,22 @@ export async function getEastmoneyQuote(input: {
   const q = new URLSearchParams()
   q.set('secid', secid)
   q.set('fields', 'f116,f117,f20,f21,f9,f162')
+  q.set('ut', 'bd1d9ddb04089700cf9c27f6f7426281')
   const url = `https://push2.eastmoney.com/api/qt/stock/get?${q.toString()}`
 
-  const payload = await fetchJson<EastmoneyStockGetResponse>(url, {
-    timeoutMs: input.timeoutMs ?? 12_000,
-    headers: { referer: 'https://quote.eastmoney.com' },
-  })
+  let payload: EastmoneyStockGetResponse
+  try {
+    payload = await fetchJson<EastmoneyStockGetResponse>(url, {
+      timeoutMs: input.timeoutMs ?? 12_000,
+      headers: { referer: 'https://quote.eastmoney.com' },
+    })
+  } catch {
+    const text = await fetchText(`https://r.jina.ai/${url}`, {
+      timeoutMs: input.timeoutMs ?? 12_000,
+      headers: { accept: 'text/plain,*/*;q=0.8' },
+    })
+    payload = parseLooseJson<EastmoneyStockGetResponse>(text)
+  }
 
   const d = payload.data ?? {}
 
@@ -61,4 +80,3 @@ export async function getEastmoneyQuote(input: {
     pe: Number.isFinite(pe as number) ? pe : undefined,
   }
 }
-
