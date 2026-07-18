@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
@@ -20,8 +20,6 @@ export default function SimilarStocksPanel(props: {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [runKey, setRunKey] = useState(0)
-
-  const cand = useMemo(() => undefined, [])
 
   useEffect(() => {
     if (runKey === 0) return
@@ -50,7 +48,6 @@ export default function SimilarStocksPanel(props: {
         s3LastDays: standards.s3.lastDays,
         s3RangeRatioMin: standards.s3.rangeRatioMin,
         s3RangeRatioMax: standards.s3.rangeRatioMax,
-        candidates: cand,
       },
       ac.signal,
     )
@@ -68,7 +65,7 @@ export default function SimilarStocksPanel(props: {
         setLoading(false)
       })
     return () => ac.abort()
-  }, [props.targetSymbol, props.klt, props.fqt, props.days, cand, runKey, standards])
+  }, [props.targetSymbol, props.klt, props.fqt, props.days, runKey, standards])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -178,6 +175,8 @@ export default function SimilarStocksPanel(props: {
           />
         </div>
       </div>
+
+      <div className="mt-2 text-xs text-slate-500">候选范围：全市场（优先实时市场列表，失败时回退最近缓存）</div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button

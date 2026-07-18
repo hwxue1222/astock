@@ -68,6 +68,7 @@ export async function getEastmoneyKline(input: {
   klt: KlineKlt
   fqt: KlineFqt
   limit: number
+  timeoutMs?: number
 }): Promise<{ code: string; name?: string; candles: KlineCandle[]; source: string }> {
   const secid = secidForAshare(input.code)
   const q = new URLSearchParams()
@@ -82,7 +83,7 @@ export async function getEastmoneyKline(input: {
   const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?${q.toString()}`
   try {
     const payload = await fetchJson<EastmoneyKlineResponse>(url, {
-      timeoutMs: 25_000,
+      timeoutMs: input.timeoutMs ?? 25_000,
       headers: { referer: 'https://quote.eastmoney.com' },
     })
 

@@ -12,6 +12,9 @@ import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getTencentKline } from '../providers/tencentKline.js'
 import { findSimilarStocks } from '../domain/similarity.js'
+import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
+import { getRumorsOverview } from '../domain/rumors.js'
+import { getThsClassicStats } from '../providers/thsClassic.js'
 
 const router = Router()
 
@@ -77,6 +80,19 @@ router.get('/universe', async (req: Request, res: Response): Promise<void> => {
   })
 })
 
+router.get('/ths-classic', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const out = await getThsClassicStats({ ttlSeconds: 5 * 60, timeoutMs: 12_000 })
+    res.status(200).json({ success: true, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'THS classic unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
 router.get(
   '/:symbol/events',
   async (req: Request, res: Response): Promise<void> => {
@@ -104,15 +120,20 @@ router.get(
       return
     }
 
-    let events: Awaited<ReturnType<typeof getEastmoneyAnnouncements>>
+    let ann: Awaited<ReturnType<typeof getEastmoneyAnnouncements>> = []
     try {
-      events = await getEastmoneyAnnouncements({ code, pageSize: 30 })
+      ann = await getEastmoneyAnnouncements({ code, pageSize: 30 })
     } catch (e: unknown) {
       void e
+    }
+
+    const news = await getEastmoneyF10News({ code, limit: 20 }).catch(() => [])
+
+    const events = [...ann, ...news]
+    if (!events.length) {
       res.status(502).json({
         success: false,
         error: 'Events provider unavailable (real data required)',
-        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
       })
       return
     }
@@ -122,16 +143,22 @@ router.get(
     const filtered = events
       .filter((e) => new Date(e.publishedAt) >= from)
       .map((e) => ({ ...e, riskLevel: eventRiskLevel(e) }))
+    const uniq = new Map<string, (typeof filtered)[number]>()
+    for (const e of filtered) {
+      const key = e.sourceUrl ? `url:${e.sourceUrl}` : `t:${e.title}::${e.publishedAt}`
+      if (!uniq.has(key)) uniq.set(key, e)
+    }
+    const merged = Array.from(uniq.values()).sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : -1))
     const byType = type.length
-      ? filtered.filter((e) => type.includes(e.eventType))
-      : filtered
+      ? merged.filter((e) => type.includes(e.eventType))
+      : merged
 
     res.status(200).json({
       success: true,
       symbol: code,
       events: byType,
       meta: {
-        source: 'eastmoney_notice',
+        source: 'eastmoney_notice+eastmoney_news',
       },
     })
   },
@@ -227,15 +254,15 @@ router.get(
     }
 
     const code = normalizeAshareCode(symbol)
-    let events: Awaited<ReturnType<typeof getEastmoneyAnnouncements>>
-    try {
-      events = await getEastmoneyAnnouncements({ code, pageSize: 30 })
-    } catch (e: unknown) {
-      void e
+    const [ann, news] = await Promise.all([
+      getEastmoneyAnnouncements({ code, pageSize: 30 }).catch(() => []),
+      getEastmoneyF10News({ code, limit: 20 }).catch(() => []),
+    ])
+    const events = [...ann, ...news]
+    if (!events.length) {
       res.status(502).json({
         success: false,
         error: 'Events provider unavailable (real data required)',
-        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
       })
       return
     }
@@ -251,7 +278,7 @@ router.get(
       success: true,
       ...payload,
       meta: {
-        source: 'eastmoney_notice',
+        source: 'eastmoney_notice+eastmoney_news',
       },
     })
   },
@@ -374,6 +401,29 @@ router.get(
       res.status(502).json({
         success: false,
         error: 'Similar search unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+    }
+  },
+)
+
+router.get(
+  '/:symbol/rumors',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const code = normalizeAshareCode(symbol)
+    const limit = Number(req.query.limit ?? 40)
+
+    try {
+      const out = await getRumorsOverview({
+        code,
+        limit: Number.isFinite(limit) ? limit : 40,
+      })
+      res.status(200).json({ success: true, ...out })
+    } catch (e: unknown) {
+      res.status(502).json({
+        success: false,
+        error: 'Rumors provider unavailable (real data required)',
         detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
       })
     }

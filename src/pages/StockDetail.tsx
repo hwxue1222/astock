@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import EventsFeed from '@/components/EventsFeed'
 import KlinePanel from '@/components/KlinePanel'
 import RatiosPanel from '@/components/RatiosPanel'
+import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
 import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import TopBar from '@/components/TopBar'
@@ -23,6 +24,7 @@ export default function StockDetail() {
 
   const selectedSymbol = useStockStore((s) => s.selectedSymbol)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
+  const watchlist = useStockStore((s) => s.watchlist)
   const rangeDays = useStockStore((s) => s.rangeDays)
   const eventTypes = useStockStore((s) => s.eventTypes)
   const ratiosAsOf = useStockStore((s) => s.ratiosAsOf)
@@ -40,6 +42,7 @@ export default function StockDetail() {
   const setKline = useStockStore((s) => s.setKline)
   const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
   const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
+  const addToWatchlist = useStockStore((s) => s.addToWatchlist)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
 
@@ -151,6 +154,11 @@ export default function StockDetail() {
 
   const title = `个股详情`
 
+  const inWatchlist = useMemo(() => {
+    const s = routeSymbol.toUpperCase()
+    return watchlist.map((x) => x.toUpperCase()).includes(s)
+  }, [watchlist, routeSymbol])
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <TopBar
@@ -182,6 +190,18 @@ export default function StockDetail() {
               <div className="mt-1 text-xs text-slate-500">事件时间线 · 信号解释 · 财务比率口径</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={inWatchlist}
+                onClick={() => addToWatchlist(routeSymbol)}
+                className={
+                  inWatchlist
+                    ? 'rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-500'
+                    : 'rounded-lg border border-slate-800 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-white'
+                }
+              >
+                {inWatchlist ? '已在自选' : '加入自选'}
+              </button>
               <div className="text-xs text-slate-400">
                 标准股：
                 <span className="text-slate-200">{standardSymbol ?? '未设置'}</span>
@@ -232,6 +252,7 @@ export default function StockDetail() {
               highlightEventId={highlightEventId}
               onHighlightEvent={setHighlightEventId}
             />
+            <RumorsPanel symbol={routeSymbol} />
           </div>
 
           <div className="space-y-4">

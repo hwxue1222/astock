@@ -63,6 +63,7 @@ export async function getTencentKline(input: {
   period: TencentKlinePeriod
   adjust: TencentAdjust
   limit: number
+  timeoutMs?: number
 }): Promise<{ code: string; candles: TencentCandle[]; source: string }> {
   const symbol = symbolForAshare(input.code)
   const limit = Math.max(20, Math.min(800, input.limit))
@@ -70,7 +71,8 @@ export async function getTencentKline(input: {
   const url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${symbol},${input.period},,,${limit},${adjust}`
 
   const headers = { referer: 'https://gu.qq.com' }
-  const text = await fetchText(url, { timeoutMs: 25_000, headers }).catch(() => '')
+  const timeoutMs = input.timeoutMs ?? 25_000
+  const text = await fetchText(url, { timeoutMs, headers }).catch(() => '')
   let payload: TencentPayload | null = null
   const trimmed = text.trim()
   if (trimmed && !trimmed.startsWith('<')) {
@@ -82,7 +84,16 @@ export async function getTencentKline(input: {
   }
 
   if (!payload) {
-    const args = ['-L', '--max-time', '25', '-H', 'user-agent: Mozilla/5.0', '-H', 'referer: https://gu.qq.com', url]
+    const args = [
+      '-L',
+      '--max-time',
+      String(Math.max(5, Math.ceil(timeoutMs / 1000))),
+      '-H',
+      'user-agent: Mozilla/5.0',
+      '-H',
+      'referer: https://gu.qq.com',
+      url,
+    ]
     const out = await execFileAsync('curl', args, { maxBuffer: 10 * 1024 * 1024 })
     const t = String(out.stdout || '').trim()
     if (!t || t.startsWith('<')) throw new Error('Tencent kline returned non-JSON response')

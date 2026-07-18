@@ -54,5 +54,21 @@ describe('buildRiskSignals', () => {
     const res = buildRiskSignals({ symbol: 'AAA', events, now })
     expect(res.overallLevel).toBe('LOW')
   })
-})
 
+  it('forces overall HIGH when any event is marked HIGH', () => {
+    const now = new Date('2026-01-31T00:00:00.000Z')
+    const events: MajorEvent[] = [
+      {
+        id: 'e1',
+        symbol: 'AAA',
+        title: 'Tender ban',
+        sourceName: 'MockWire',
+        publishedAt: isoDaysAgo(120),
+        eventType: 'OTHER',
+        riskLevel: 'HIGH',
+      },
+    ]
+    const res = buildRiskSignals({ symbol: 'AAA', events, now })
+    expect(res.overallLevel).toBe('HIGH')
+  })
+})

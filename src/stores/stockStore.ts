@@ -8,6 +8,7 @@ interface StockState {
   selectedSymbol: string | null
   standardSymbol: string | null
   watchlist: string[]
+  blacklist: string[]
   rangeDays: number
   eventTypes: EventType[]
   ratiosAsOf: RatiosAsOf
@@ -25,7 +26,10 @@ interface StockState {
   setStandardSymbol: (symbol: string) => void
   clearStandardSymbol: () => void
   toggleWatchlist: (symbol: string) => void
+  addToWatchlist: (symbol: string) => void
   addManyToWatchlist: (symbols: string[]) => void
+  toggleBlacklist: (symbol: string) => void
+  addToBlacklist: (symbol: string) => void
   setRangeDays: (days: number) => void
   setEventTypes: (types: EventType[]) => void
   setRatiosAsOf: (asOf: RatiosAsOf) => void
@@ -53,6 +57,7 @@ export const useStockStore = create<StockState>()(
       selectedSymbol: null,
       standardSymbol: '002829',
       watchlist: ['600519', '000001', '300750'],
+      blacklist: [],
       rangeDays: 30,
       eventTypes: [],
       ratiosAsOf: 'latest',
@@ -89,10 +94,31 @@ export const useStockStore = create<StockState>()(
         }
         set({ watchlist: uniqueUpper([...list, s]) })
       },
+      addToWatchlist: (symbol) => {
+        const s = symbol.toUpperCase()
+        const list = get().watchlist
+        if (list.includes(s)) return
+        set({ watchlist: uniqueUpper([...list, s]) })
+      },
       addManyToWatchlist: (symbols) => {
         const list = get().watchlist
         const merged = uniqueUpper([...list, ...symbols])
         set({ watchlist: merged })
+      },
+      toggleBlacklist: (symbol) => {
+        const s = symbol.toUpperCase()
+        const list = get().blacklist
+        if (list.includes(s)) {
+          set({ blacklist: list.filter((x) => x !== s) })
+          return
+        }
+        set({ blacklist: uniqueUpper([...list, s]) })
+      },
+      addToBlacklist: (symbol) => {
+        const s = symbol.toUpperCase()
+        const list = get().blacklist
+        if (list.includes(s)) return
+        set({ blacklist: uniqueUpper([...list, s]) })
       },
       setRangeDays: (days) => {
         set({ rangeDays: days })
@@ -121,14 +147,19 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 7,
+      version: 8,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 7) return persisted
+        if (version >= 8) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
           ? p.watchlist.map((x) => String(x).toUpperCase()).filter(isAshareCode)
+          : []
+        const blacklist = Array.isArray((p as { blacklist?: unknown }).blacklist)
+          ? (p as { blacklist: unknown[] }).blacklist
+              .map((x) => String(x).toUpperCase())
+              .filter(isAshareCode)
           : []
         const selectedSymbolRaw = p.selectedSymbol ? String(p.selectedSymbol).toUpperCase() : null
         const selectedSymbol = selectedSymbolRaw && isAshareCode(selectedSymbolRaw) ? selectedSymbolRaw : null
@@ -139,6 +170,7 @@ export const useStockStore = create<StockState>()(
           selectedSymbol,
           standardSymbol,
           watchlist: watchlist.length ? watchlist : ['600519', '000001', '300750'],
+          blacklist,
           klineKlt: '101',
           klineFqt: '1',
           klineLimit: 180,

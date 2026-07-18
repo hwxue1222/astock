@@ -109,3 +109,54 @@ export interface SimilarStocksResponse {
     source?: string
   }
 }
+
+export interface RumorKeyword {
+  keyword: string
+  count: number
+}
+
+export interface RumorTopic {
+  topic: string
+  count: number
+}
+
+export interface RumorStats {
+  totalPosts: number
+  negativePosts: number
+  negativeRatio: number
+}
+
+export interface RumorPost {
+  id: string
+  title: string
+  url: string
+  publishedAt: string
+  matchedKeywords: string[]
+  readCount: number | null
+  replyCount: number | null
+}
+
+export interface RumorsResponse {
+  symbol: string
+  source: string
+  keywords: RumorKeyword[]
+  topics: RumorTopic[]
+  stats: RumorStats
+  posts: RumorPost[]
+}
+
+export interface ThsClassicStatItem {
+  rank: 1 | 2 | 3
+  title: string
+  timeText: string
+  url?: string
+  articleTimeText?: string | null
+  articleSourceText?: string | null
+}
+
+export interface ThsClassicStatsResponse {
+  sourceName: '同花顺 classic'
+  sourceUrl: string
+  fetchedAtISO: string
+  items: ThsClassicStatItem[]
+}

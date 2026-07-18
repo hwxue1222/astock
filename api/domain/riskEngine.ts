@@ -57,6 +57,15 @@ function maxLevel(a: RiskLevel, b: RiskLevel): RiskLevel {
   return score(a) >= score(b) ? a : b
 }
 
+function maxRiskLevel(levels: Array<RiskLevel | undefined>): RiskLevel | null {
+  let best: RiskLevel | null = null
+  for (const l of levels) {
+    if (!l) continue
+    best = best ? maxLevel(best, l) : l
+  }
+  return best
+}
+
 export function buildRiskSignals(input: {
   symbol: string
   events: MajorEvent[]
@@ -78,12 +87,15 @@ export function buildRiskSignals(input: {
     const latest = sorted[0]
     if (!latest) continue
 
+    const explicitMax = maxRiskLevel(sorted.map((e) => e.riskLevel))
+    const chosen = explicitMax ? sorted.find((e) => e.riskLevel === explicitMax) ?? latest : latest
+
     const base = baseLevelForEventType(eventType)
-    const base2 = latest.riskLevel ? maxLevel(base, latest.riskLevel) : base
-    const level = levelByRecency(base2, latest.publishedAt, now)
+    const base2 = chosen.riskLevel ? maxLevel(base, chosen.riskLevel) : base
+    const level = explicitMax ? maxLevel(levelByRecency(base2, chosen.publishedAt, now), explicitMax) : levelByRecency(base2, chosen.publishedAt, now)
 
     const relatedEventIds = sorted.slice(0, 6).map((e) => e.id)
-    const reason = `${latest.title}（${latest.sourceName}）`
+    const reason = `${chosen.title}（${chosen.sourceName}）`
 
     signals.push({
       id: `sig_${symbol}_${eventType}`,
@@ -92,7 +104,7 @@ export function buildRiskSignals(input: {
       title: titleForEventType(eventType),
       reason,
       relatedEventIds,
-      occurredAt: latest.publishedAt,
+      occurredAt: chosen.publishedAt,
       direction: eventType === 'MNA' ? 'UNCERTAIN' : 'NEGATIVE',
     })
   }
@@ -103,7 +115,11 @@ export function buildRiskSignals(input: {
     return a.occurredAt < b.occurredAt ? 1 : -1
   })
 
-  const overallScore = signals.reduce((m, s) => Math.max(m, riskScore(s.level)), 1)
+  const anyHighEvent = input.events.some((e) => e.riskLevel === 'HIGH')
+  const overallScore = Math.max(
+    signals.reduce((m, s) => Math.max(m, riskScore(s.level)), 1),
+    anyHighEvent ? riskScore('HIGH') : 1,
+  )
   const overallLevel = levelFromScore(overallScore)
 
   return {

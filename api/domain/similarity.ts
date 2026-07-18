@@ -1,5 +1,6 @@
-import { getSinaSpotDataset } from '../providers/ashareSinaSpot.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
+import { getEastmoneyClist } from '../providers/eastmoneyClist.js'
+import { getSinaSpotDataset } from '../providers/ashareSinaSpot.js'
 import { getTencentKline } from '../providers/tencentKline.js'
 
 type Candle = {
@@ -15,6 +16,12 @@ export type SimilarStock = {
   symbol: string
   name: string | undefined
   score: number
+}
+
+type UniverseEntry = {
+  code: string
+  name?: string
+  marketCapYuan?: number
 }
 
 function clamp01(n: number): number {
@@ -83,7 +90,13 @@ async function hasTurnoverSpikeInLastDays(input: {
 }): Promise<boolean> {
   const days = Math.max(2, Math.min(20, input.days))
   const multiple = Math.max(1.1, Math.min(10, input.multiple))
-  const out = await getEastmoneyKline({ code: input.code, klt: '101', fqt: '1', limit: days + 1 })
+  const out = await getEastmoneyKline({
+    code: input.code,
+    klt: '101',
+    fqt: '1',
+    limit: days + 1,
+    timeoutMs: 5_000,
+  })
   const xs = out.candles
     .slice(-1 * (days + 1))
     .map((c) => (typeof c.turnover === 'number' ? c.turnover : null))
@@ -140,27 +153,54 @@ async function getCandlesCached(input: {
   fqt: '0' | '1' | '2'
   limit: number
   ttlMs: number
+  timeoutMs?: number
+  fallbackToTencent?: boolean
 }): Promise<Candle[]> {
   const key = `${input.code}:${input.klt}:${input.fqt}:${input.limit}`
   const hit = cache.get(key)
   if (hit && Date.now() - hit.tsMs <= input.ttlMs) return hit.candles
 
-  const period = mapKltToPeriod(input.klt)
-  const adjust = mapFqtToAdjust(input.fqt)
-  const out = await getTencentKline({
-    code: input.code,
-    period,
-    adjust,
-    limit: input.limit,
-  })
-  const candles = out.candles.map((c) => ({
-    ts: c.ts,
-    open: c.open,
-    high: c.high,
-    low: c.low,
-    close: c.close,
-    volume: c.volume,
-  }))
+  let candles: Candle[] = []
+  try {
+    const out = await getEastmoneyKline({
+      code: input.code,
+      klt: input.klt,
+      fqt: input.fqt,
+      limit: input.limit,
+      timeoutMs: input.timeoutMs,
+    })
+    candles = out.candles.map((c) => ({
+      ts: c.ts,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    }))
+  } catch {
+    candles = []
+  }
+
+  const fallbackToTencent = input.fallbackToTencent ?? true
+  if (!candles.length && fallbackToTencent) {
+    const period = mapKltToPeriod(input.klt)
+    const adjust = mapFqtToAdjust(input.fqt)
+    const out = await getTencentKline({
+      code: input.code,
+      period,
+      adjust,
+      limit: input.limit,
+      timeoutMs: input.timeoutMs,
+    })
+    candles = out.candles.map((c) => ({
+      ts: c.ts,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume,
+    }))
+  }
   cache.set(key, { tsMs: Date.now(), candles })
   return candles
 }
@@ -181,6 +221,98 @@ async function mapLimit<T, R>(
   })
   await Promise.all(workers)
   return out
+}
+
+function selectUniverseEntries(input: {
+  items: UniverseEntry[]
+  maxCandidates: number
+  sort: 'mktcap_desc' | 'mktcap_asc'
+  capLimitYuan: number
+  applyCapLimit: boolean
+  nameByCode: Map<string, string>
+  capYuanByCode: Map<string, number>
+}): string[] {
+  const entries = input.items
+    .map((it) => ({
+      code: normalizeAshareCode(it.code),
+      name: typeof it.name === 'string' ? it.name.trim() : '',
+      marketCapYuan: typeof it.marketCapYuan === 'number' ? it.marketCapYuan : NaN,
+    }))
+    .filter((it) => /^\d{6}$/.test(it.code))
+
+  for (const it of entries) {
+    if (it.name) input.nameByCode.set(it.code, it.name)
+    if (Number.isFinite(it.marketCapYuan) && it.marketCapYuan > 0) {
+      input.capYuanByCode.set(it.code, it.marketCapYuan)
+    }
+  }
+
+  const filtered = entries.filter((it) => {
+    if (!input.applyCapLimit) return true
+    return Number.isFinite(it.marketCapYuan) && it.marketCapYuan > 0 && it.marketCapYuan <= input.capLimitYuan
+  })
+
+  filtered.sort((a, b) => {
+    const ca = Number.isFinite(a.marketCapYuan) ? a.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
+    const cb = Number.isFinite(b.marketCapYuan) ? b.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
+    return input.sort === 'mktcap_asc' ? ca - cb : cb - ca
+  })
+
+  return Array.from(new Set(filtered.map((it) => it.code))).slice(0, input.maxCandidates)
+}
+
+async function getFullMarketCandidates(input: {
+  maxCandidates: number
+  sort: 'mktcap_desc' | 'mktcap_asc'
+  capLimitYuan: number
+  applyCapLimit: boolean
+  nameByCode: Map<string, string>
+  capYuanByCode: Map<string, number>
+}): Promise<{ candidates: string[]; source: 'eastmoney_clist' | 'sina_spot_cache' }> {
+  const fetchSize = Math.max(
+    40,
+    Math.min(200, input.applyCapLimit ? input.maxCandidates * 4 : input.maxCandidates * 2),
+  )
+
+  try {
+    const cl = await getEastmoneyClist({
+      page: 1,
+      pageSize: fetchSize,
+      sort: input.sort,
+      timeoutMs: 12_000,
+    })
+    const candidates = selectUniverseEntries({
+      items: cl.items,
+      maxCandidates: input.maxCandidates,
+      sort: input.sort,
+      capLimitYuan: input.capLimitYuan,
+      applyCapLimit: input.applyCapLimit,
+      nameByCode: input.nameByCode,
+      capYuanByCode: input.capYuanByCode,
+    })
+    if (candidates.length) return { candidates, source: 'eastmoney_clist' }
+  } catch {
+    // Fall through to the cached Sina full-market snapshot.
+  }
+
+  const ds = await getSinaSpotDataset({ preferNetwork: false, ttlSeconds: 7 * 24 * 3600 })
+  const items = (ds?.items ?? []).map((it) => ({
+    code: String(it.code ?? ''),
+    name: typeof it.name === 'string' ? it.name : undefined,
+    marketCapYuan: typeof it.mktcap === 'number' ? it.mktcap * 10_000 : undefined,
+  }))
+  const candidates = selectUniverseEntries({
+    items,
+    maxCandidates: input.maxCandidates,
+    sort: input.sort,
+    capLimitYuan: input.capLimitYuan,
+    applyCapLimit: input.applyCapLimit,
+    nameByCode: input.nameByCode,
+    capYuanByCode: input.capYuanByCode,
+  })
+  if (candidates.length) return { candidates, source: 'sina_spot_cache' }
+
+  throw new Error('Full-market candidate pool unavailable')
 }
 
 export async function findSimilarStocks(input: {
@@ -213,44 +345,39 @@ export async function findSimilarStocks(input: {
   const s3RangeRatioMax = Math.max(s3RangeRatioMin, Math.min(10, input.s3RangeRatioMax))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
-  const limit = enabled.has(2) ? Math.max(40, s2LastDays + 5) : Math.max(40, s3LastDays + 5)
+  const limit = enabled.has(2) || enabled.has(3) ? 20 : 0
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
 
-  const ds = await getSinaSpotDataset({ ttlSeconds: 6 * 3600 })
-  const nameByCode = new Map((ds?.items ?? []).map((x) => [String(x.code ?? '').trim(), x.name]))
+  const nameByCode = new Map<string, string>()
+  const capYuanByCode = new Map<string, number>()
 
   let candidates: string[]
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
   } else {
-    const maxCandidates = Math.max(20, Math.min(120, input.maxCandidates ?? 60))
+    const maxCandidates = Math.max(
+      8,
+      Math.min(
+        120,
+        enabled.has(2) || enabled.has(3) ? Math.min(input.maxCandidates ?? 60, 8) : input.maxCandidates ?? 60,
+      ),
+    )
 
-    const rows = (ds?.items ?? [])
-      .map((x) => {
-        const code = String(x.code ?? '').trim()
-        const capYuan = typeof x.mktcap === 'number' ? x.mktcap * 10_000 : undefined
-        return { code, capYuan }
-      })
-      .filter((x): x is { code: string; capYuan: number } => /^\d{6}$/.test(x.code) && typeof x.capYuan === 'number')
-
-    const filtered = enabled.has(1) ? rows.filter((x) => x.capYuan <= capLimitYuan) : rows
-    filtered.sort((a, b) => b.capYuan - a.capYuan)
-    candidates = filtered.slice(0, maxCandidates).map((x) => x.code)
+    const sort = enabled.has(1) ? 'mktcap_asc' : 'mktcap_desc'
+    const out = await getFullMarketCandidates({
+      maxCandidates,
+      sort,
+      capLimitYuan,
+      applyCapLimit: enabled.has(1),
+      nameByCode,
+      capYuanByCode,
+    })
+    candidates = out.candidates
   }
 
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target).slice(0, 120)
 
-  const capYuanByCode = new Map(
-    (ds?.items ?? [])
-      .map((x) => {
-        const code = String(x.code ?? '').trim()
-        const capYuan = typeof x.mktcap === 'number' ? x.mktcap * 10_000 : undefined
-        return [code, capYuan] as const
-      })
-      .filter((x): x is readonly [string, number] => Boolean(x[0]) && typeof x[1] === 'number'),
-  )
-
-  if (enabled.has(1)) {
+  if (enabled.has(1) && capYuanByCode.size) {
     candidates = candidates.filter((c) => {
       const cap = capYuanByCode.get(c)
       return typeof cap === 'number' ? cap <= capLimitYuan : false
@@ -279,13 +406,15 @@ export async function findSimilarStocks(input: {
         fqt: '1',
         limit,
         ttlMs: 10 * 60 * 1000,
+        timeoutMs: 6_000,
+        fallbackToTencent: false,
       })
     : []
 
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
   const targetRange = enabled.has(3) ? avgRangePct({ candles: targetCandles, lastDays: s3LastDays }) : null
 
-  const rows = await mapLimit(candidates, 2, async (code) => {
+  const rows = await mapLimit(candidates, enabled.has(2) || enabled.has(3) ? 4 : 2, async (code) => {
     try {
       const candles = await getCandlesCached({
         code,
@@ -293,6 +422,8 @@ export async function findSimilarStocks(input: {
         fqt: '1',
         limit,
         ttlMs: 10 * 60 * 1000,
+        timeoutMs: 6_000,
+        fallbackToTencent: false,
       })
       if (enabled.has(3) && targetRange !== null) {
         const r = avgRangePct({ candles, lastDays: s3LastDays })
@@ -326,8 +457,8 @@ export async function findSimilarStocks(input: {
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
 
   if (enabled.has(2)) {
-    const pool = scored.slice(0, s2PreselectTop)
-    const passed = await mapLimit(pool, 2, async (it) => {
+    const pool = scored.slice(0, Math.min(s2PreselectTop, 10))
+    const passed = await mapLimit(pool, 4, async (it) => {
       try {
         const ok = await hasTurnoverSpikeInLastDays({
           code: it.symbol,
