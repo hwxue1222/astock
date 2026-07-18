@@ -1,5 +1,5 @@
 import { ExternalLink, RefreshCcw } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getThsClassicArticleStocks } from '@/lib/stockApi'
 import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
@@ -14,45 +14,41 @@ export default function ThsClassicStatsPanel(props: {
   const [codesByRank, setCodesByRank] = useState<Record<number, string[]>>({})
   const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const nameByCode = useMemo(() => {
     const u = props.universe ?? []
     return new Map(u.map((x) => [String(x.symbol).toUpperCase(), String(x.name ?? '').trim()]))
   }, [props.universe])
 
-  useEffect(() => {
-    const items = props.data?.items?.slice(0, 3) ?? []
-    if (!items.length) return
-    const ac = new AbortController()
-
-    void (async () => {
-      for (const it of items) {
-        if (ac.signal.aborted) return
-        if (!it.url) continue
-        if (codesByRank[it.rank]?.length) continue
-        if (loadingByRank[it.rank]) continue
-        setLoadingByRank((m) => ({ ...m, [it.rank]: true }))
-        setErrorByRank((m) => {
-          const next = { ...m }
-          delete next[it.rank]
-          return next
-        })
-
-        try {
-          const res = await getThsClassicArticleStocks(it.url, { limit: 10 }, ac.signal)
-          const codes = (res.codes ?? [])
-            .map((x) => String(x).toUpperCase())
-            .filter((x) => /^\d{6}$/.test(x))
-          setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
-        } catch (e: unknown) {
-          setErrorByRank((m) => ({ ...m, [it.rank]: e instanceof Error ? e.message : String(e) }))
-        } finally {
-          setLoadingByRank((m) => ({ ...m, [it.rank]: false }))
-        }
-      }
-    })()
-
-    return () => ac.abort()
-  }, [props.data, codesByRank, loadingByRank])
+  async function parseRank(it: ThsClassicStatsResponse['items'][number]): Promise<void> {
+    if (!it.url) return
+    if (loadingByRank[it.rank]) return
+    setLoadingByRank((m) => ({ ...m, [it.rank]: true }))
+    setErrorByRank((m) => {
+      const next = { ...m }
+      delete next[it.rank]
+      return next
+    })
+    try {
+      const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
+      const codes = (res.codes ?? []).map((x) => String(x).toUpperCase()).filter((x) => /^\d{6}$/.test(x))
+      if (!mountedRef.current) return
+      setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
+    } catch (e: unknown) {
+      if (!mountedRef.current) return
+      setErrorByRank((m) => ({ ...m, [it.rank]: e instanceof Error ? e.message : String(e) }))
+    } finally {
+      if (!mountedRef.current) return
+      setLoadingByRank((m) => ({ ...m, [it.rank]: false }))
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -123,28 +119,40 @@ export default function ThsClassicStatsPanel(props: {
                       </div>
 
                       <div className="mt-2">
-                        {loadingByRank[it.rank] ? (
-                          <div className="text-xs text-slate-500">正在解析股票清单…</div>
-                        ) : errorByRank[it.rank] ? (
+                        {loadingByRank[it.rank] ? <div className="text-xs text-slate-500">解析中…</div> : null}
+                        {errorByRank[it.rank] ? (
                           <div className="text-xs text-red-200">解析失败：{errorByRank[it.rank]}</div>
-                        ) : codesByRank[it.rank]?.length ? (
-                          <div className="flex flex-wrap gap-2">
+                        ) : null}
+                        {codesByRank[it.rank]?.length ? (
+                          <div className="mt-2 grid grid-cols-1 gap-1">
                             {codesByRank[it.rank].map((code) => (
-                              <div
-                                key={code}
-                                className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-                              >
-                                {code}
+                              <div key={code} className="text-xs text-slate-200">
+                                <span className="font-semibold">{code}</span>
                                 {nameByCode.get(code) ? <span className="text-slate-400"> · {nameByCode.get(code)}</span> : null}
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-xs text-slate-500">暂无股票清单</div>
+                          <div className="text-xs text-slate-500">未解析</div>
                         )}
                       </div>
                     </div>
                   </div>
+
+                  {it.url ? (
+                    <button
+                      type="button"
+                      disabled={loadingByRank[it.rank]}
+                      onClick={() => void parseRank(it)}
+                      className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      {loadingByRank[it.rank]
+                        ? '解析中…'
+                        : codesByRank[it.rank]?.length
+                          ? '重新解析'
+                          : '解析(10股)'}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
