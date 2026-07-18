@@ -52,21 +52,17 @@ export default function ThsClassicStatsPanel(props: {
           <div className="text-sm text-red-200">{props.error}</div>
         ) : props.data?.items?.length ? (
           <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2">
               {props.data.items.slice(0, 3).map((it) => (
                 <div
                   key={it.rank}
-                  className="flex flex-col justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-3"
+                  className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-3"
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-600 text-xs font-semibold text-white">
-                        {it.rank}
-                      </div>
-                      <div className="text-xs text-slate-400">{it.timeText}</div>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-600 text-xs font-semibold text-white">
+                      {it.rank}
                     </div>
-
-                    <div className="mt-3 min-w-0">
+                    <div className="min-w-0">
                       {it.url ? (
                         <a
                           href={it.url}
@@ -79,42 +75,45 @@ export default function ThsClassicStatsPanel(props: {
                       ) : (
                         <div className="text-sm font-semibold leading-snug text-slate-100">{it.title}</div>
                       )}
-                      <div className="mt-2 text-xs text-slate-500">
+                      <div className="mt-1 text-xs text-slate-500">
                         来源：同花顺 classic
                         {it.articleTimeText ? ` · 文章时间：${it.articleTimeText}` : ''}
                         {it.articleSourceText ? ` · ${it.articleSourceText}` : ''}
                       </div>
                       {addedByRank[it.rank]?.length ? (
-                        <div className="mt-2 text-xs text-slate-500">已加入自选：{addedByRank[it.rank].join('、')}</div>
+                        <div className="mt-1 text-xs text-slate-500">已加入自选：{addedByRank[it.rank].join('、')}</div>
                       ) : null}
                     </div>
                   </div>
 
-                  {it.url ? (
-                    <button
-                      type="button"
-                      disabled={extractingRank === it.rank}
-                      onClick={async () => {
-                        setExtractingRank(it.rank)
-                        try {
-                          const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
-                          const codes = (res.codes ?? [])
-                            .map((x) => String(x).toUpperCase())
-                            .filter((x) => /^\d{6}$/.test(x))
-                          const newOnes = codes.filter((c) => !watchlistSet.has(c))
-                          if (newOnes.length) addManyToWatchlist(newOnes)
-                          setAddedByRank((m) => ({ ...m, [it.rank]: codes }))
-                        } catch {
-                          setAddedByRank((m) => ({ ...m, [it.rank]: [] }))
-                        } finally {
-                          setExtractingRank(null)
-                        }
-                      }}
-                      className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-                    >
-                      {extractingRank === it.rank ? '提取中…' : '加入自选(10股)'}
-                    </button>
-                  ) : null}
+                  <div className="shrink-0 text-right">
+                    <div className="text-xs text-slate-400">{it.timeText}</div>
+                    {it.url ? (
+                      <button
+                        type="button"
+                        disabled={extractingRank === it.rank}
+                        onClick={async () => {
+                          setExtractingRank(it.rank)
+                          try {
+                            const res = await getThsClassicArticleStocks(it.url, { limit: 10 })
+                            const codes = (res.codes ?? [])
+                              .map((x) => String(x).toUpperCase())
+                              .filter((x) => /^\d{6}$/.test(x))
+                            const newOnes = codes.filter((c) => !watchlistSet.has(c))
+                            if (newOnes.length) addManyToWatchlist(newOnes)
+                            setAddedByRank((m) => ({ ...m, [it.rank]: codes }))
+                          } catch {
+                            setAddedByRank((m) => ({ ...m, [it.rank]: [] }))
+                          } finally {
+                            setExtractingRank(null)
+                          }
+                        }}
+                        className="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        {extractingRank === it.rank ? '提取中…' : '加入自选(10股)'}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
