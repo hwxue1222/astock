@@ -23,6 +23,7 @@ interface StockState {
     s3: { enabled: boolean; lastDays: number; changePct: number; volumeMultiple: number }
   }
   similarLast: { key: string; data: SimilarStocksResponse; atISO: string } | null
+  thsClassicParsedByUrl: Record<string, { codes: string[]; atISO: string }>
   setSelectedSymbol: (symbol: string) => void
   setStandardSymbol: (symbol: string) => void
   clearStandardSymbol: () => void
@@ -43,6 +44,8 @@ interface StockState {
   ) => void
   setSimilarLast: (next: StockState['similarLast']) => void
   clearSimilarLast: () => void
+  setThsClassicParsed: (input: { url: string; codes: string[] }) => void
+  clearThsClassicParsed: (input: { url: string }) => void
 }
 
 function uniqueUpper(list: string[]): string[] {
@@ -73,6 +76,7 @@ export const useStockStore = create<StockState>()(
         s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
       },
       similarLast: null,
+      thsClassicParsedByUrl: {},
       expandedRatioKeys: {
         net_assets_over_total_assets: false,
         revenue_over_market_cap: false,
@@ -154,13 +158,29 @@ export const useStockStore = create<StockState>()(
       clearSimilarLast: () => {
         set({ similarLast: null })
       },
+      setThsClassicParsed: ({ url, codes }) => {
+        const u = String(url ?? '').trim()
+        if (!u) return
+        const list = (codes ?? []).map((x) => String(x).toUpperCase()).filter((x) => /^\d{6}$/.test(x))
+        const map = get().thsClassicParsedByUrl
+        set({ thsClassicParsedByUrl: { ...map, [u]: { codes: Array.from(new Set(list)), atISO: new Date().toISOString() } } })
+      },
+      clearThsClassicParsed: ({ url }) => {
+        const u = String(url ?? '').trim()
+        if (!u) return
+        const map = get().thsClassicParsedByUrl
+        if (!map[u]) return
+        const next = { ...map }
+        delete next[u]
+        set({ thsClassicParsedByUrl: next })
+      },
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 13,
+      version: 14,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 13) return persisted
+        if (version >= 14) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -190,6 +210,7 @@ export const useStockStore = create<StockState>()(
             s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
           },
           similarLast: null,
+          thsClassicParsedByUrl: {},
         }
       },
     },

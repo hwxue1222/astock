@@ -13,6 +13,8 @@ export default function ThsClassicStatsPanel(props: {
 }): JSX.Element {
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
   const watchlist = useStockStore((s) => s.watchlist)
+  const parsedByUrl = useStockStore((s) => s.thsClassicParsedByUrl)
+  const setParsed = useStockStore((s) => s.setThsClassicParsed)
   const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
 
   const nameByCode = useMemo(() => {
@@ -20,7 +22,6 @@ export default function ThsClassicStatsPanel(props: {
   }, [props.universe])
 
   const [loadingByRank, setLoadingByRank] = useState<Record<number, boolean>>({})
-  const [codesByRank, setCodesByRank] = useState<Record<number, string[]>>({})
   const [errorByRank, setErrorByRank] = useState<Record<number, string>>({})
 
   const [quoteByCode, setQuoteByCode] = useState<
@@ -125,9 +126,9 @@ export default function ThsClassicStatsPanel(props: {
                       {errorByRank[it.rank] ? (
                         <div className="text-xs text-red-200">解析失败：{errorByRank[it.rank]}</div>
                       ) : null}
-                      {codesByRank[it.rank]?.length ? (
+                      {(parsedByUrl[it.url]?.codes ?? []).length ? (
                         <div className="mt-2 space-y-1">
-                          {codesByRank[it.rank].map((code) => {
+                          {(parsedByUrl[it.url]?.codes ?? []).map((code) => {
                             const already = watchlistSet.has(code)
                             const name = nameByCode.get(code)
                             const q = quoteByCode[code]
@@ -197,7 +198,7 @@ export default function ThsClassicStatsPanel(props: {
                           const codes = (res.codes ?? [])
                             .map((x) => String(x).toUpperCase())
                             .filter((x) => /^\d{6}$/.test(x))
-                          setCodesByRank((m) => ({ ...m, [it.rank]: codes }))
+                          setParsed({ url: it.url, codes })
 
                           const uniq = Array.from(new Set(codes))
                           for (const code of uniq) {
@@ -245,7 +246,11 @@ export default function ThsClassicStatsPanel(props: {
                       }}
                       className="mt-2 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
                     >
-                      {loadingByRank[it.rank] ? '解析中…' : codesByRank[it.rank]?.length ? '重新解析' : '解析(10股)'}
+                      {loadingByRank[it.rank]
+                        ? '解析中…'
+                        : (parsedByUrl[it.url]?.codes ?? []).length
+                          ? '重新解析'
+                          : '解析(10股)'}
                     </button>
                   ) : null}
                 </div>
