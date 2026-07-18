@@ -5,6 +5,11 @@ import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse } from '@/types/stock'
 
+type SimilarRequest = {
+  symbol: string
+  input: Parameters<typeof getSimilarStocks>[1]
+}
+
 export default function SimilarStocksPanel(props: {
   targetSymbol: string
   klt: KlineKlt
@@ -31,36 +36,15 @@ export default function SimilarStocksPanel(props: {
   const [data, setData] = useState<SimilarStocksResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [runKey, setRunKey] = useState(0)
+  const [request, setRequest] = useState<SimilarRequest | null>(null)
 
   useEffect(() => {
-    if (runKey === 0) return
+    if (!request) return
     const ac = new AbortController()
     setLoading(true)
     setError(null)
 
-    const enabled: Array<1 | 2 | 3> = [
-      standards.s1.enabled ? 1 : null,
-      standards.s2.enabled ? 2 : null,
-      standards.s3.enabled ? 3 : null,
-    ].filter((x): x is 1 | 2 | 3 => x !== null)
-
-    getSimilarStocks(
-      compareSymbol,
-      {
-        days: props.days,
-        top: 10,
-        klt: props.klt,
-        fqt: props.fqt,
-        enabled,
-        s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
-        s2LastDays: standards.s2.lastDays,
-        s2MinSimilarity: standards.s2.minSimilarity,
-        s3ChangePct: standards.s3.changePct,
-        s3VolumeMultiple: standards.s3.volumeMultiple,
-      },
-      ac.signal,
-    )
+    getSimilarStocks(request.symbol, request.input, ac.signal)
       .then((d) => {
         if (ac.signal.aborted) return
         setData(d)
@@ -75,7 +59,7 @@ export default function SimilarStocksPanel(props: {
         setLoading(false)
       })
     return () => ac.abort()
-  }, [compareSymbol, props.klt, props.fqt, props.days, runKey, standards])
+  }, [request])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -156,12 +140,13 @@ export default function SimilarStocksPanel(props: {
           />
           <div className="text-xs text-slate-400">日 K 线形态与对比股相似 ≥</div>
           <input
-            type="number"
-            value={Math.round(standards.s2.minSimilarity * 100)}
-            min={0}
-            max={100}
-            step={1}
-            onChange={(e) => setStandard('s2', { minSimilarity: Number(e.target.value) / 100 })}
+            inputMode="numeric"
+            value={String(Math.round(standards.s2.minSimilarity * 100))}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const pct = raw ? Math.max(0, Math.min(100, Number(raw))) : 0
+              setStandard('s2', { minSimilarity: pct / 100 })
+            }}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
           <div className="text-xs text-slate-400">%</div>
@@ -204,7 +189,30 @@ export default function SimilarStocksPanel(props: {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setRunKey((x) => x + 1)}
+          onClick={() => {
+            const enabled: Array<1 | 2 | 3> = [
+              standards.s1.enabled ? 1 : null,
+              standards.s2.enabled ? 2 : null,
+              standards.s3.enabled ? 3 : null,
+            ].filter((x): x is 1 | 2 | 3 => x !== null)
+
+            setData(null)
+            setRequest({
+              symbol: compareSymbol,
+              input: {
+                days: props.days,
+                top: 10,
+                klt: props.klt,
+                fqt: props.fqt,
+                enabled,
+                s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
+                s2LastDays: standards.s2.lastDays,
+                s2MinSimilarity: standards.s2.minSimilarity,
+                s3ChangePct: standards.s3.changePct,
+                s3VolumeMultiple: standards.s3.volumeMultiple,
+              },
+            })
+          }}
           className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-white"
         >
           计算相似股清单
