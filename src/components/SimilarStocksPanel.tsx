@@ -306,7 +306,15 @@ export default function SimilarStocksPanel(props: {
             ))}
           </div>
         ) : (
-          <div className="text-sm text-slate-400">暂无结果</div>
+          <div className="space-y-1 text-sm text-slate-400">
+            <div>暂无结果</div>
+            {standards.s2.enabled && standards.s2.minSimilarity >= 0.8 ? (
+              <div className="text-xs text-slate-500">标准2阈值偏高；可先把相似度降到 60%~70% 试试</div>
+            ) : null}
+            {standards.s1.enabled || standards.s3.enabled ? (
+              <div className="text-xs text-slate-500">也可能是叠加条件过严；可先只勾选一个标准验证</div>
+            ) : null}
+          </div>
         )}
       </div>
     </div>
