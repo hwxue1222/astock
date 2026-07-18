@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { cacheFilePath, readJsonCache, writeJsonCache } from './fsCache.js'
+import { readJsonCache, writeJsonCache } from './fsCache.js'
 import { fetchJson } from './http.js'
 
 export type EastmoneyClistItem = {
@@ -27,7 +27,7 @@ export async function getEastmoneyClist(input: {
   const pz = Math.max(5, Math.min(200, input.pageSize))
   const po = input.sort === 'mktcap_asc' ? 0 : 1
 
-  const cachePath = cacheFilePath(`eastmoney_clist_${input.sort}_${pn}_${pz}.json`)
+  const cachePath = path.join(process.cwd(), '.cache', `eastmoney_clist_${input.sort}_${pn}_${pz}.json`)
   const cached = await readJsonCache<{ total: number; items: EastmoneyClistItem[] }>(cachePath, {
     ttlSeconds: 10 * 60,
   })

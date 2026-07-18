@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fetchJson } from './http.js'
-import { cacheFilePath, readJsonCache, writeJsonCache } from './fsCache.js'
+import { readJsonCache, writeJsonCache } from './fsCache.js'
 
 export interface SinaSpotRow {
   symbol?: string
@@ -20,7 +20,7 @@ function defaultExternalCachePath(): string {
 }
 
 function internalCachePath(): string {
-  return cacheFilePath('ashare_spot_sina.json')
+  return path.resolve(process.cwd(), '.cache', 'ashare_spot_sina.json')
 }
 
 async function fileExists(p: string): Promise<boolean> {
@@ -153,3 +153,4 @@ export function pickMarketCapYuanFromDataset(
   }
   return undefined
 }
+
