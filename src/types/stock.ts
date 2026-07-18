@@ -160,3 +160,8 @@ export interface ThsClassicStatsResponse {
   fetchedAtISO: string
   items: ThsClassicStatItem[]
 }
+
+export interface ThsClassicArticleStocksResponse {
+  url: string
+  codes: string[]
+}
