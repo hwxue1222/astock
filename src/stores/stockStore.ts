@@ -20,7 +20,7 @@ interface StockState {
   similarStandards: {
     s1: { enabled: boolean; maxMarketCapYi: number }
     s2: { enabled: boolean; lastDays: number; turnoverSpikeMultiple: number; preselectTop: number }
-    s3: { enabled: boolean; dailyDays: number; monthlyMonths: number; minSimilarity: number }
+    s3: { enabled: boolean; lastDays: number; rangeRatioMin: number; rangeRatioMax: number }
   }
   setSelectedSymbol: (symbol: string) => void
   setStandardSymbol: (symbol: string) => void
@@ -67,7 +67,7 @@ export const useStockStore = create<StockState>()(
       similarStandards: {
         s1: { enabled: true, maxMarketCapYi: 150 },
         s2: { enabled: true, lastDays: 5, turnoverSpikeMultiple: 2, preselectTop: 30 },
-        s3: { enabled: false, dailyDays: 5, monthlyMonths: 24, minSimilarity: 0.8 },
+        s3: { enabled: false, lastDays: 5, rangeRatioMin: 0.5, rangeRatioMax: 2 },
       },
       expandedRatioKeys: {
         net_assets_over_total_assets: false,
@@ -147,10 +147,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 9,
+      version: 8,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 9) return persisted
+        if (version >= 8) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -177,7 +177,7 @@ export const useStockStore = create<StockState>()(
           similarStandards: {
             s1: { enabled: true, maxMarketCapYi: 150 },
             s2: { enabled: true, lastDays: 5, turnoverSpikeMultiple: 2, preselectTop: 30 },
-            s3: { enabled: false, dailyDays: 5, monthlyMonths: 24, minSimilarity: 0.8 },
+            s3: { enabled: false, lastDays: 5, rangeRatioMin: 0.5, rangeRatioMax: 2 },
           },
         }
       },
