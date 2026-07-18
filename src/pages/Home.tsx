@@ -123,6 +123,7 @@ export default function Home() {
               onAdd={(s) => addToWatchlist(s)}
               onRemove={(s) => toggleWatchlist(s)}
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+              showBasics
             />
             <SymbolListCard
               title="黑名单"

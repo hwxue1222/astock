@@ -21,6 +21,8 @@ export async function fetchText(
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return await res.text()
     } catch (e: unknown) {
+      const isVercel = String(process.env.VERCEL ?? '').toLowerCase() === '1' || !!process.env.VERCEL
+      if (isVercel) throw e
       const allow = String(process.env.ALLOW_CURL_FALLBACK ?? '1').toLowerCase()
       if (!(allow === '1' || allow === 'true' || allow === 'yes')) throw e
       const timeoutSeconds = Math.max(5, Math.ceil((input?.timeoutMs ?? 15_000) / 1000))

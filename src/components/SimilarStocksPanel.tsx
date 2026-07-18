@@ -130,7 +130,7 @@ export default function SimilarStocksPanel(props: {
             onChange={(e) => setStandard('s2', { lastDays: Number(e.target.value) })}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">日形态相似 + 换手率放大 ≥</div>
+          <div className="text-xs text-slate-400">日内有涨停/跌停 + 成交量突增 ≥</div>
           <input
             type="number"
             value={standards.s2.turnoverSpikeMultiple}
@@ -139,17 +139,7 @@ export default function SimilarStocksPanel(props: {
             onChange={(e) => setStandard('s2', { turnoverSpikeMultiple: Number(e.target.value) })}
             className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
-          <div className="text-xs text-slate-400">倍（预选Top</div>
-          <input
-            type="number"
-            value={standards.s2.preselectTop}
-            min={10}
-            max={80}
-            step={1}
-            onChange={(e) => setStandard('s2', { preselectTop: Number(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">）</div>
+          <div className="text-xs text-slate-400">倍</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -198,7 +188,7 @@ export default function SimilarStocksPanel(props: {
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
-        标准1=近N日形态相似+换手率突增；标准2=月线(近N个月)+日线(近N日)综合相似度阈值 · 候选范围：全市场（失败时回退最近缓存）
+        标准1=近N日涨跌停事件+成交量突增过滤并按近N日形态相似打分；标准2=月线(近N个月)+日线(近N日)综合相似度阈值 · 候选范围：全市场（失败时回退最近缓存）
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">

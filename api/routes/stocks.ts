@@ -15,6 +15,7 @@ import { findSimilarStocks } from '../domain/similarity.ts'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
+import { getEastmoneyMarketCaps } from '../providers/eastmoneyQuote.js'
 
 const router = Router()
 
@@ -254,6 +255,25 @@ router.get(
       success: false,
       error: 'Ratios provider unavailable (real data required)',
     })
+  },
+)
+
+router.get(
+  '/:symbol/mktcaps',
+  async (req: Request, res: Response): Promise<void> => {
+    const symbol = String(req.params.symbol ?? '').toUpperCase()
+    const code = normalizeAshareCode(symbol)
+    try {
+      const out = await getEastmoneyMarketCaps({ code, timeoutMs: 12_000 })
+      res.status(200).json({ success: true, symbol, ...out })
+      return
+    } catch (e: unknown) {
+      res.status(502).json({
+        success: false,
+        error: 'Market caps provider unavailable (real data required)',
+        detail: errorMessage(e),
+      })
+    }
   },
 )
 
