@@ -333,43 +333,21 @@ export async function findSimilarStocks(input: {
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
   } else {
-    const maxCandidates = Math.max(8, Math.min(120, input.maxCandidates ?? 60))
+    const maxCandidates = Math.max(20, Math.min(200, input.maxCandidates ?? 200))
+    const n = Math.max(20, Math.min(100, Math.floor(maxCandidates / 2)))
+    const [gainers, losers] = await Promise.all([
+      getEastmoneyClist({ page: 1, pageSize: n, sort: 'pctchg_desc', timeoutMs: 12_000 }),
+      getEastmoneyClist({ page: 1, pageSize: n, sort: 'pctchg_asc', timeoutMs: 12_000 }),
+    ])
 
-    if (enabled.has(3) && !enabled.has(2)) {
-      const fetchSize = Math.max(40, Math.min(200, maxCandidates * 2))
-      try {
-        const out = await getEastmoneyClist({ page: 1, pageSize: fetchSize, sort: 'pctchg_desc', timeoutMs: 12_000 })
-        for (const it of out.items) {
-          nameByCode.set(it.code, it.name)
-          capYuanByCode.set(it.code, it.marketCapYuan)
-        }
-        candidates = out.items
-          .filter((it) => (s3LastDays <= 1 ? typeof it.pctChg === 'number' && it.pctChg + 0.02 >= s3ChangePct : true))
-          .map((it) => it.code)
-          .slice(0, maxCandidates)
-      } catch {
-        const out = await getFullMarketCandidates({
-          maxCandidates,
-          sort: 'mktcap_desc',
-          capLimitYuan,
-          applyCapLimit: enabled.has(1),
-          nameByCode,
-          capYuanByCode,
-        })
-        candidates = out.candidates
-      }
-    } else {
-      const sort = enabled.has(3) ? 'pctchg_desc' : enabled.has(1) ? 'mktcap_asc' : 'mktcap_desc'
-      const out = await getFullMarketCandidates({
-        maxCandidates,
-        sort,
-        capLimitYuan,
-        applyCapLimit: enabled.has(1),
-        nameByCode,
-        capYuanByCode,
-      })
-      candidates = out.candidates
+    for (const it of [...gainers.items, ...losers.items]) {
+      nameByCode.set(it.code, it.name)
+      capYuanByCode.set(it.code, it.marketCapYuan)
     }
+    candidates = Array.from(new Set([...gainers.items.map((x) => x.code), ...losers.items.map((x) => x.code)])).slice(
+      0,
+      maxCandidates,
+    )
   }
 
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target).slice(0, 120)

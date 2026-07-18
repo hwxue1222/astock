@@ -29,13 +29,13 @@ const ASHARE_FS = 'm:0+t:6,m:0+t:13,m:1+t:2,m:1+t:23'
 export async function getEastmoneyClist(input: {
   page: number
   pageSize: number
-  sort: 'mktcap_desc' | 'mktcap_asc' | 'pctchg_desc'
+  sort: 'mktcap_desc' | 'mktcap_asc' | 'pctchg_desc' | 'pctchg_asc'
   timeoutMs?: number
 }): Promise<{ total: number; items: EastmoneyClistItem[] }> {
   const pn = Math.max(1, Math.min(200, input.page))
   const pz = Math.max(5, Math.min(200, input.pageSize))
-  const po = input.sort === 'mktcap_asc' ? 0 : 1
-  const fid = input.sort === 'pctchg_desc' ? 'f3' : 'f20'
+  const po = input.sort === 'mktcap_asc' || input.sort === 'pctchg_asc' ? 0 : 1
+  const fid = input.sort === 'pctchg_desc' || input.sort === 'pctchg_asc' ? 'f3' : 'f20'
 
   const cachePath = cacheFilePath(`eastmoney_clist_${input.sort}_${pn}_${pz}.json`)
   const cached = await readJsonCache<{ total: number; items: EastmoneyClistItem[] }>(cachePath, {

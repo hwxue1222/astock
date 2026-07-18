@@ -16,7 +16,6 @@ export default function SimilarStocksPanel(props: {
   const navigate = useNavigate()
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
-  const addManyToWatchlist = useStockStore((s) => s.addManyToWatchlist)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
   const watchlist = useStockStore((s) => s.watchlist)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
@@ -235,7 +234,7 @@ export default function SimilarStocksPanel(props: {
         </div>
       </div>
 
-      <div className="mt-2 text-xs text-slate-500">候选范围：全市场（优先实时市场列表，失败时回退最近缓存）</div>
+      <div className="mt-2 text-xs text-slate-500">候选范围：涨幅榜前100 + 跌幅榜前100</div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
@@ -267,15 +266,6 @@ export default function SimilarStocksPanel(props: {
         >
           计算相似股清单
         </button>
-        {data?.top?.length ? (
-          <button
-            type="button"
-            onClick={() => addManyToWatchlist(data.top.map((x) => x.symbol))}
-            className="whitespace-nowrap rounded-xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800"
-          >
-            加入自选
-          </button>
-        ) : null}
       </div>
 
       {data && similarLast?.key !== currentPlannedKey ? (
