@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import SymbolListCard from '@/components/SymbolListCard'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import TopBar from '@/components/TopBar'
@@ -13,12 +12,6 @@ export default function Home() {
   const navigate = useNavigate()
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
-  const standardSymbol = useStockStore((s) => s.standardSymbol)
-  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
-  const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
-  const klineKlt = useStockStore((s) => s.klineKlt)
-  const klineFqt = useStockStore((s) => s.klineFqt)
-  const klineLimit = useStockStore((s) => s.klineLimit)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
   const toggleWatchlist = useStockStore((s) => s.toggleWatchlist)
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
@@ -108,19 +101,7 @@ export default function Home() {
             }}
           />
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <SimilarStocksPanel
-              targetSymbol={standardSymbol ?? '002829'}
-              standardSymbol={standardSymbol}
-              onSetStandardSymbol={setStandardSymbol}
-              onClearStandardSymbol={clearStandardSymbol}
-              watchlist={watchlist}
-              onAddToWatchlist={addToWatchlist}
-              mode="kline"
-              klt={klineKlt}
-              fqt={klineFqt}
-              days={klineLimit}
-            />
+          <div className="grid gap-4 lg:grid-cols-2">
             <SymbolListCard
               title="自选股"
               symbols={watchlist}
