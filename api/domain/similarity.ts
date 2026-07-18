@@ -174,7 +174,7 @@ async function getCandlesCached(input: {
       volume: c.volume,
     }))
   }
-  cache.set(key, { tsMs: Date.now(), candles })
+  if (candles.length) cache.set(key, { tsMs: Date.now(), candles })
   return candles
 }
 
@@ -199,7 +199,7 @@ async function mapLimit<T, R>(
 function selectUniverseEntries(input: {
   items: UniverseEntry[]
   maxCandidates: number
-  sort: 'mktcap_desc' | 'mktcap_asc'
+  sort: 'mktcap_desc' | 'mktcap_asc' | 'pctchg_desc'
   capLimitYuan: number
   applyCapLimit: boolean
   nameByCode: Map<string, string>
@@ -225,18 +225,20 @@ function selectUniverseEntries(input: {
     return Number.isFinite(it.marketCapYuan) && it.marketCapYuan > 0 && it.marketCapYuan <= input.capLimitYuan
   })
 
-  filtered.sort((a, b) => {
-    const ca = Number.isFinite(a.marketCapYuan) ? a.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
-    const cb = Number.isFinite(b.marketCapYuan) ? b.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
-    return input.sort === 'mktcap_asc' ? ca - cb : cb - ca
-  })
+  if (input.sort === 'mktcap_asc' || input.sort === 'mktcap_desc') {
+    filtered.sort((a, b) => {
+      const ca = Number.isFinite(a.marketCapYuan) ? a.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
+      const cb = Number.isFinite(b.marketCapYuan) ? b.marketCapYuan : input.sort === 'mktcap_asc' ? Number.POSITIVE_INFINITY : 0
+      return input.sort === 'mktcap_asc' ? ca - cb : cb - ca
+    })
+  }
 
   return Array.from(new Set(filtered.map((it) => it.code))).slice(0, input.maxCandidates)
 }
 
 async function getFullMarketCandidates(input: {
   maxCandidates: number
-  sort: 'mktcap_desc' | 'mktcap_asc'
+  sort: 'mktcap_desc' | 'mktcap_asc' | 'pctchg_desc'
   capLimitYuan: number
   applyCapLimit: boolean
   nameByCode: Map<string, string>
@@ -320,6 +322,7 @@ export async function findSimilarStocks(input: {
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const limit = enabled.has(2) || enabled.has(3) ? 20 : 0
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? 2 : 0
+  const klineFqt = enabled.has(3) ? '0' : '1'
 
   const nameByCode = new Map<string, string>()
   const capYuanByCode = new Map<string, number>()
@@ -328,24 +331,43 @@ export async function findSimilarStocks(input: {
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
   } else {
-    const maxCandidates = Math.max(
-      8,
-      Math.min(
-        120,
-        enabled.has(2) || enabled.has(3) ? Math.min(input.maxCandidates ?? 60, 8) : input.maxCandidates ?? 60,
-      ),
-    )
+    const maxCandidates = Math.max(8, Math.min(120, input.maxCandidates ?? 60))
 
-    const sort = enabled.has(1) ? 'mktcap_asc' : 'mktcap_desc'
-    const out = await getFullMarketCandidates({
-      maxCandidates,
-      sort,
-      capLimitYuan,
-      applyCapLimit: enabled.has(1),
-      nameByCode,
-      capYuanByCode,
-    })
-    candidates = out.candidates
+    if (enabled.has(3) && !enabled.has(2)) {
+      const fetchSize = Math.max(40, Math.min(200, maxCandidates * 2))
+      try {
+        const out = await getEastmoneyClist({ page: 1, pageSize: fetchSize, sort: 'pctchg_desc', timeoutMs: 12_000 })
+        for (const it of out.items) {
+          nameByCode.set(it.code, it.name)
+          capYuanByCode.set(it.code, it.marketCapYuan)
+        }
+        candidates = out.items
+          .filter((it) => typeof it.pctChg === 'number' && it.pctChg + 0.02 >= s3ChangePct)
+          .map((it) => it.code)
+          .slice(0, maxCandidates)
+      } catch {
+        const out = await getFullMarketCandidates({
+          maxCandidates,
+          sort: 'mktcap_desc',
+          capLimitYuan,
+          applyCapLimit: enabled.has(1),
+          nameByCode,
+          capYuanByCode,
+        })
+        candidates = out.candidates
+      }
+    } else {
+      const sort = enabled.has(3) ? 'pctchg_desc' : enabled.has(1) ? 'mktcap_asc' : 'mktcap_desc'
+      const out = await getFullMarketCandidates({
+        maxCandidates,
+        sort,
+        capLimitYuan,
+        applyCapLimit: enabled.has(1),
+        nameByCode,
+        capYuanByCode,
+      })
+      candidates = out.candidates
+    }
   }
 
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target).slice(0, 120)
@@ -376,27 +398,80 @@ export async function findSimilarStocks(input: {
     ? await getCandlesCached({
         code: target,
         klt: '101',
-        fqt: '1',
+        fqt: klineFqt,
         limit,
         ttlMs: 10 * 60 * 1000,
-        timeoutMs: 6_000,
-        fallbackToTencent: false,
+        timeoutMs: 12_000,
+        fallbackToTencent: true,
       })
     : []
 
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
   void targetCandles
 
+  if (enabled.has(3) && !enabled.has(2)) {
+    const want = top
+    const picked: Array<SimilarStock & { idx: number }> = []
+    const pickedSet = new Set<string>()
+    let i = 0
+
+    const workers = new Array(4).fill(null).map(async () => {
+      while (true) {
+        if (picked.length >= want) return
+        const idx = i
+        i += 1
+        if (idx >= candidates.length) return
+        const code = candidates[idx]
+        try {
+          const candles = await getCandlesCached({
+            code,
+            klt: '101',
+            fqt: klineFqt,
+            limit,
+            ttlMs: 10 * 60 * 1000,
+            timeoutMs: 12_000,
+            fallbackToTencent: true,
+          })
+          const xs = candles.slice(-2)
+          if (xs.length < 2) continue
+          const prev = xs[0]
+          const cur = xs[1]
+          const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
+          const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
+          if (!(changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple)) continue
+
+          if (pickedSet.has(code)) continue
+          pickedSet.add(code)
+          picked.push({
+            symbol: code,
+            name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+            score: clamp01(1 - idx / Math.max(1, candidates.length)),
+            idx,
+          })
+        } catch {
+          continue
+        }
+      }
+    })
+
+    await Promise.all(workers)
+    const out = picked
+      .sort((a, b) => a.idx - b.idx)
+      .slice(0, top)
+      .map(({ idx: _idx, ...x }) => x)
+    return { target, candidates: candidates.length, top: out, meta: { window } }
+  }
+
   const rows = await mapLimit(candidates, enabled.has(2) || enabled.has(3) ? 4 : 2, async (code) => {
     try {
       const candles = await getCandlesCached({
         code,
         klt: '101',
-        fqt: '1',
+        fqt: klineFqt,
         limit,
         ttlMs: 10 * 60 * 1000,
-        timeoutMs: 6_000,
-        fallbackToTencent: false,
+        timeoutMs: 12_000,
+        fallbackToTencent: true,
       })
       if (enabled.has(3)) {
         const xs = candles.slice(-2)
@@ -405,7 +480,7 @@ export async function findSimilarStocks(input: {
         const cur = xs[1]
         const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
         const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
-        if (!(changePctAbs >= s3ChangePct && volMultiple >= s3VolumeMultiple)) return null
+        if (!(changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple)) return null
       }
 
       if (enabled.has(2)) {

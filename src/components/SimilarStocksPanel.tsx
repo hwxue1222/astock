@@ -109,11 +109,13 @@ export default function SimilarStocksPanel(props: {
           </label>
           <div className="text-xs text-slate-400">总市值 ≤</div>
           <input
-            type="number"
-            value={standards.s1.maxMarketCapYi}
-            min={1}
-            step={1}
-            onChange={(e) => setStandard('s1', { maxMarketCapYi: Number(e.target.value) })}
+            inputMode="numeric"
+            value={String(standards.s1.maxMarketCapYi)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const v = raw ? Number(raw) : 0
+              setStandard('s1', { maxMarketCapYi: v })
+            }}
             className="w-24 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
           <div className="text-xs text-slate-400">亿</div>
@@ -163,22 +165,34 @@ export default function SimilarStocksPanel(props: {
           </label>
           <div className="text-xs text-slate-400">最近1日涨跌幅 ≥</div>
           <input
-            type="number"
-            value={standards.s3.changePct}
-            min={0}
-            max={30}
-            step={0.01}
-            onChange={(e) => setStandard('s3', { changePct: Number(e.target.value) })}
+            inputMode="decimal"
+            value={String(standards.s3.changePct)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, '')
+              const normalized = raw
+                ? raw
+                    .replace(/^0+(\d)/, '$1')
+                    .replace(/\.(?=.*\.)/g, '')
+                : ''
+              const v = normalized ? Number(normalized) : 0
+              setStandard('s3', { changePct: v })
+            }}
             className="w-20 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
           <div className="text-xs text-slate-400">% 且 成交量 ≥ 前一日 ×</div>
           <input
-            type="number"
-            value={standards.s3.volumeMultiple}
-            min={1}
-            max={10}
-            step={0.1}
-            onChange={(e) => setStandard('s3', { volumeMultiple: Number(e.target.value) })}
+            inputMode="decimal"
+            value={String(standards.s3.volumeMultiple)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9.]/g, '')
+              const normalized = raw
+                ? raw
+                    .replace(/^0+(\d)/, '$1')
+                    .replace(/\.(?=.*\.)/g, '')
+                : ''
+              const v = normalized ? Number(normalized) : 0
+              setStandard('s3', { volumeMultiple: v })
+            }}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>
