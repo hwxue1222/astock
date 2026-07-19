@@ -32,6 +32,13 @@ export default function ThsClassicStatsPanel(props: {
   >({})
   const [klineByCode, setKlineByCode] = useState<Record<string, { closes: number[] }>>({})
 
+  function openExternal(url: string) {
+    const next = String(url ?? '').trim()
+    if (!next) return
+    const w = window.open(next, '_blank', 'noopener,noreferrer')
+    if (!w) window.location.href = next
+  }
+
   function formatYi(yuan?: number): string {
     if (yuan === undefined) return '—'
     if (!Number.isFinite(yuan)) return '—'
@@ -66,15 +73,14 @@ export default function ThsClassicStatsPanel(props: {
           <div className="mt-1 text-xs text-slate-500">展示前三条，并标注来源与文章时间</div>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="https://www.10jqka.com.cn/classic/"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={() => openExternal('https://www.10jqka.com.cn/classic/')}
             className="inline-flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
           >
             打开来源
             <ExternalLink className="h-4 w-4" />
-          </a>
+          </button>
           <button
             type="button"
             onClick={props.onRefresh}
@@ -106,8 +112,10 @@ export default function ThsClassicStatsPanel(props: {
                     {it.url ? (
                       <a
                         href={it.url}
-                        target="_blank"
-                        rel="noreferrer"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          openExternal(it.url)
+                        }}
                         className="block truncate text-sm font-semibold text-slate-100 hover:underline"
                       >
                         {it.title}

@@ -83,24 +83,6 @@ function buildDailyShapeFeature(input: { candles: Candle[]; lastDays: number }):
   return [...zr, ...zb, ...zg]
 }
 
-void 0
-
-function avgRangePct(input: { candles: Candle[]; lastDays: number }): number | null {
-  const n = Math.max(2, Math.min(30, input.lastDays))
-  const c = input.candles
-  if (c.length < n) return null
-  const recent = c.slice(-1 * n)
-  const xs = recent
-    .map((x) => {
-      const denom = Math.max(1e-9, Math.abs(x.close))
-      const v = (x.high - x.low) / denom
-      return Number.isFinite(v) ? v : null
-    })
-    .filter((x): x is number => x !== null)
-  if (!xs.length) return null
-  return xs.reduce((s, x) => s + x, 0) / xs.length
-}
-
 function normalizeAshareCode(symbol: string): string {
   const raw = String(symbol ?? '').trim().toUpperCase()
   if (!raw) return ''
@@ -236,7 +218,7 @@ function selectUniverseEntries(input: {
   return Array.from(new Set(filtered.map((it) => it.code))).slice(0, input.maxCandidates)
 }
 
-async function getFullMarketCandidates(input: {
+export async function getFullMarketCandidates(input: {
   maxCandidates: number
   sort: 'mktcap_desc' | 'mktcap_asc' | 'pctchg_desc'
   capLimitYuan: number
@@ -445,7 +427,7 @@ export async function findSimilarStocks(input: {
     const out = picked
       .sort((a, b) => a.idx - b.idx)
       .slice(0, top)
-      .map(({ idx: _idx, ...x }) => x)
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
     return { target, candidates: candidates.length, top: out, meta: { window } }
   }
 
