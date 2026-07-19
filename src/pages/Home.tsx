@@ -126,7 +126,7 @@ export default function Home() {
 
           <IndustryMoneyflowPanel />
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="space-y-4">
             <SimilarStocksPanel
               targetSymbol={standardSymbol ?? '002829'}
               klt={klineKlt}
