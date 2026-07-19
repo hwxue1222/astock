@@ -36,7 +36,7 @@ export default function ThsClassicStatsPanel(props: {
     const next = String(url ?? '').trim()
     if (!next) return
     const w = window.open(next, '_blank', 'noopener,noreferrer')
-    if (!w) window.location.href = next
+    if (!w) window.open(next, '_blank')
   }
 
   function formatYi(yuan?: number): string {
@@ -112,6 +112,8 @@ export default function ThsClassicStatsPanel(props: {
                     {it.url ? (
                       <a
                         href={it.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         onClick={(e) => {
                           e.preventDefault()
                           openExternal(it.url)
