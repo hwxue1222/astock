@@ -29,6 +29,21 @@ function formatPct(pct?: number): string {
   return `${s}${pct.toFixed(2)}%`
 }
 
+function sparklinePoints(closes: number[], w = 110, h = 28): string {
+  if (closes.length < 2) return ''
+  const min = Math.min(...closes)
+  const max = Math.max(...closes)
+  const dx = w / (closes.length - 1)
+  const denom = Math.max(1e-9, max - min)
+  return closes
+    .map((v, i) => {
+      const x = i * dx
+      const y = h - ((v - min) / denom) * h
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+}
+
 export default function SymbolsTablePanel(props: {
   title: string
   symbols: string[]
@@ -197,7 +212,7 @@ export default function SymbolsTablePanel(props: {
       <div className="p-2">
         {filtered.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-800">
-            <div className="grid grid-cols-12 bg-slate-900/70 px-3 py-2 text-[11px] text-slate-400">
+            <div className="grid grid-cols-13 bg-slate-900/70 px-3 py-2 text-[11px] text-slate-400">
               <div className="col-span-2">代码</div>
               <div className="col-span-3">名称</div>
               <div className="col-span-2">行业</div>
@@ -205,6 +220,8 @@ export default function SymbolsTablePanel(props: {
               <div className="col-span-1 text-right">换手</div>
               <div className="col-span-2 text-right">成交额</div>
               <div className="col-span-1 text-right">市值</div>
+              <div className="col-span-1 text-right">走势</div>
+              <div className="col-span-1 text-right">操作</div>
             </div>
             <div className="divide-y divide-slate-800">
               {visible.map(({ symbol, meta }) => {
@@ -214,8 +231,9 @@ export default function SymbolsTablePanel(props: {
                 const industry = quoteBySymbol[symbol]?.industry
                 const name = meta?.name ?? quoteBySymbol[symbol]?.name
                 const mktCap = quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap
+                const closes = (klineBySymbol[symbol]?.candles ?? []).map((c) => c.close).filter((x) => Number.isFinite(x))
                 return (
-                  <div key={symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-2 text-xs">
+                  <div key={symbol} className="grid grid-cols-13 items-center gap-2 px-3 py-2 text-xs">
                     <button
                       type="button"
                       onClick={() => props.onOpen(symbol)}
@@ -230,16 +248,27 @@ export default function SymbolsTablePanel(props: {
                     <div className="col-span-2 text-right text-slate-300">{formatYi(stats.amount)}</div>
                     <div className="col-span-1 text-right text-slate-300">{formatYi(mktCap)}</div>
 
-                    <button
-                      type="button"
-                      onClick={() => props.onRemove(symbol)}
-                      className="col-span-12 -mt-1 flex justify-end"
-                      aria-label="移除"
-                    >
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100">
+                    <div className="col-span-1 flex justify-end">
+                      <svg width="110" height="28" viewBox="0 0 110 28" className="block">
+                        <polyline
+                          fill="none"
+                          stroke="rgb(148 163 184)"
+                          strokeWidth="1.5"
+                          points={sparklinePoints(closes)}
+                        />
+                      </svg>
+                    </div>
+
+                    <div className="col-span-1 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => props.onRemove(symbol)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                        aria-label="移除"
+                      >
                         <Trash2 className="h-4 w-4" />
-                      </span>
-                    </button>
+                      </button>
+                    </div>
                   </div>
                 )
               })}
@@ -252,4 +281,3 @@ export default function SymbolsTablePanel(props: {
     </div>
   )
 }
-
