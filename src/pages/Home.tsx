@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import SymbolListCard from '@/components/SymbolListCard'
 import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import IndustryMoneyflowPanel from '@/components/IndustryMoneyflowPanel'
 import MarketBreadthPanel from '@/components/MarketBreadthPanel'
+import SymbolsTablePanel from '@/components/SymbolsTablePanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
 import { getThsClassicStats, getUniverse } from '@/lib/stockApi'
@@ -133,7 +133,7 @@ export default function Home() {
               fqt={klineFqt}
               days={klineLimit}
             />
-            <SymbolListCard
+            <SymbolsTablePanel
               title="自选股"
               symbols={watchlist}
               universe={universe}
@@ -142,9 +142,8 @@ export default function Home() {
               onAdd={(s) => addToWatchlist(s)}
               onRemove={(s) => toggleWatchlist(s)}
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
-              showBasics
             />
-            <SymbolListCard
+            <SymbolsTablePanel
               title="黑名单"
               symbols={blacklist}
               universe={universe}
@@ -153,7 +152,6 @@ export default function Home() {
               onAdd={(s) => addToBlacklist(s)}
               onRemove={(s) => toggleBlacklist(s)}
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
-              showBasics
             />
           </div>
         </div>
