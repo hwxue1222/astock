@@ -23,9 +23,6 @@ export default function SymbolListCard(props: {
   showBasics?: boolean
 }): JSX.Element {
   const [draft, setDraft] = useState('')
-  const [q, setQ] = useState('')
-  const [page, setPage] = useState(1)
-  const [compact, setCompact] = useState(false)
   const [klineBySymbol, setKlineBySymbol] = useState<Record<string, StockKlineResponse>>({})
   const [ratiosBySymbol, setRatiosBySymbol] = useState<Record<string, StockRatiosResponse>>({})
   const [quoteBySymbol, setQuoteBySymbol] = useState<
@@ -40,40 +37,12 @@ export default function SymbolListCard(props: {
     return props.symbols.map((s) => ({ symbol: s.toUpperCase(), meta: bySymbol.get(s.toUpperCase()) }))
   }, [props.symbols, bySymbol])
 
-  const filteredItems = useMemo(() => {
-    const needle = q.trim().toLowerCase()
-    if (!needle) return items
-    return items.filter(({ symbol, meta }) => {
-      const name = (meta?.name ?? quoteBySymbol[symbol]?.name ?? '').toLowerCase()
-      const industry = (quoteBySymbol[symbol]?.industry ?? '').toLowerCase()
-      return symbol.toLowerCase().includes(needle) || name.includes(needle) || industry.includes(needle)
-    })
-  }, [items, q, quoteBySymbol])
-
-  const pageSize = compact ? 10 : 6
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredItems.length / pageSize)), [filteredItems.length, pageSize])
-  const visibleItems = useMemo(() => {
-    const p = Math.max(1, Math.min(totalPages, page))
-    const start = (p - 1) * pageSize
-    return filteredItems.slice(start, start + pageSize)
-  }, [filteredItems, page, pageSize, totalPages])
-
-  const visibleSymbols = useMemo(() => visibleItems.map((x) => x.symbol), [visibleItems])
-
   const count = props.symbols.length
-
-  useEffect(() => {
-    setCompact(count > 8)
-  }, [count])
-
-  useEffect(() => {
-    setPage(1)
-  }, [q, props.symbols.length, compact])
 
   useEffect(() => {
     if (!props.showBasics) return
     const ac = new AbortController()
-    const uniq = Array.from(new Set(visibleSymbols.map((s) => String(s).toUpperCase()).filter((x) => /^\d{6}$/.test(x))))
+    const uniq = Array.from(new Set(props.symbols.map((s) => String(s).toUpperCase()).filter((x) => /^\d{6}$/.test(x))))
 
     void (async () => {
       for (const sym of uniq) {
@@ -105,7 +74,7 @@ export default function SymbolListCard(props: {
     })()
 
     return () => ac.abort()
-  }, [props.showBasics, visibleSymbols])
+  }, [props.showBasics, props.symbols])
 
   function formatYi(yuan?: number): string {
     if (yuan === undefined) return '—'
@@ -144,58 +113,6 @@ export default function SymbolListCard(props: {
 
         <div className="flex items-center gap-2">
           <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索代码/名称/行业"
-            className="w-40 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-500"
-          />
-
-          <button
-            type="button"
-            onClick={() => setCompact((v) => !v)}
-            className={cn(
-              'rounded-lg border px-3 py-2 text-xs font-semibold',
-              compact
-                ? 'border-slate-700 bg-slate-800 text-slate-100'
-                : 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800',
-            )}
-          >
-            紧凑
-          </button>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className={cn(
-                'rounded-lg border px-2 py-2 text-xs font-semibold',
-                page <= 1
-                  ? 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600'
-                  : 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800',
-              )}
-            >
-              上页
-            </button>
-            <div className="text-xs text-slate-500">
-              {Math.min(totalPages, Math.max(1, page))}/{totalPages}
-            </div>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages}
-              className={cn(
-                'rounded-lg border px-2 py-2 text-xs font-semibold',
-                page >= totalPages
-                  ? 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600'
-                  : 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800',
-              )}
-            >
-              下页
-            </button>
-          </div>
-
-          <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={props.addPlaceholder}
@@ -218,9 +135,9 @@ export default function SymbolListCard(props: {
       </div>
 
       <div className="p-2">
-        {filteredItems.length ? (
-          <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
-            {visibleItems.map(({ symbol, meta }) => (
+        {items.length ? (
+          <div className="space-y-2">
+            {items.map(({ symbol, meta }) => (
               <div
                 key={symbol}
                 className={cn(
@@ -242,7 +159,7 @@ export default function SymbolListCard(props: {
                     ) : null}
                   </div>
 
-                  {props.showBasics && !compact ? (
+                  {props.showBasics ? (
                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-slate-500">
                       <div>市值：{formatYi(quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap)}</div>
                       <div>流通：{formatYi(quoteBySymbol[symbol]?.floatMarketCapYuan)}</div>
@@ -254,7 +171,7 @@ export default function SymbolListCard(props: {
                   ) : null}
                 </button>
 
-                {props.showBasics && !compact ? (
+                {props.showBasics ? (
                   <div className="shrink-0">
                     <svg width="96" height="28" viewBox="0 0 96 28" className="block">
                       <polyline
