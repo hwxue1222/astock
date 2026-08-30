@@ -2,11 +2,12 @@ import { Plus, Trash2, ArrowUpDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { getKline, getQuote, getRatios, getSurvey } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
+import { useStockStore } from '@/stores/stockStore'
 import type { StockItem, StockKlineResponse, StockRatiosResponse, KlineCandle } from '@/types/stock'
 
 type StockPhase = '吸筹中' | '出现生命线' | '洗盘中' | '准备拉升' | '出货中' | ''
 
-const PHASE_ORDER: Record<StockPhase, number> = {
+const PHASE_ORDER: Record<string, number> = {
   '吸筹中': 0,
   '出现生命线': 1,
   '洗盘中': 2,
@@ -15,7 +16,16 @@ const PHASE_ORDER: Record<StockPhase, number> = {
   '': 99,
 }
 
-const PHASE_CLASS: Record<StockPhase, string> = {
+const PHASE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '— 自动 —' },
+  { value: '吸筹中', label: '吸筹中' },
+  { value: '出现生命线', label: '出现生命线' },
+  { value: '洗盘中', label: '洗盘中' },
+  { value: '准备拉升', label: '准备拉升' },
+  { value: '出货中', label: '出货中' },
+]
+
+const PHASE_CLASS: Record<string, string> = {
   '吸筹中': 'border-slate-700 bg-slate-900 text-slate-300',
   '出现生命线': 'border-sky-700 bg-sky-950 text-sky-200',
   '洗盘中': 'border-amber-700 bg-amber-950 text-amber-200',
@@ -182,14 +192,18 @@ export default function SymbolsTablePanel(props: {
   >({})
   const [stateOwnedBySymbol, setStateOwnedBySymbol] = useState<Record<string, boolean>>({})
 
+  const phaseOverrides = useStockStore((s) => s.phaseOverrides)
+  const setPhaseOverride = useStockStore((s) => s.setPhaseOverride)
+  const clearPhaseOverride = useStockStore((s) => s.clearPhaseOverride)
+
   const bySymbol = useMemo(() => new Map(props.universe.map((s) => [s.symbol.toUpperCase(), s])), [props.universe])
   const items = useMemo(() => props.symbols.map((s) => ({ symbol: s.toUpperCase(), meta: bySymbol.get(s.toUpperCase()) })), [
     props.symbols,
     bySymbol,
   ])
 
-  // 计算每只个股的阶段
-  const phaseBySymbol = useMemo(() => {
+  // 计算每只个股的阶段（自动检测）
+  const autoPhaseBySymbol = useMemo(() => {
     const map: Record<string, StockPhase> = {}
     for (const sym of props.symbols) {
       const candles = klineBySymbol[sym]?.candles ?? []
@@ -197,6 +211,11 @@ export default function SymbolsTablePanel(props: {
     }
     return map
   }, [props.symbols, klineBySymbol])
+
+  // 最终阶段：用户手动设置 > 自动检测 > 空白
+  const finalPhase = (symbol: string): string => {
+    return phaseOverrides[symbol] ?? autoPhaseBySymbol[symbol] ?? ''
+  }
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -210,13 +229,13 @@ export default function SymbolsTablePanel(props: {
     }
     if (sortByPhase) {
       list = [...list].sort((a, b) => {
-        const pa = phaseBySymbol[a.symbol] ?? ''
-        const pb = phaseBySymbol[b.symbol] ?? ''
-        return PHASE_ORDER[pa] - PHASE_ORDER[pb]
+        const pa = finalPhase(a.symbol)
+        const pb = finalPhase(b.symbol)
+        return (PHASE_ORDER[pa] ?? 99) - (PHASE_ORDER[pb] ?? 99)
       })
     }
     return list
-  }, [items, q, quoteBySymbol, sortByPhase, phaseBySymbol])
+  }, [items, q, quoteBySymbol, sortByPhase, autoPhaseBySymbol, phaseOverrides])
 
   const pageSize = 10
   const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / pageSize)), [filtered.length])
@@ -387,23 +406,32 @@ export default function SymbolsTablePanel(props: {
                 const name = meta?.name ?? quoteBySymbol[symbol]?.name
                 const mktCap = quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap
                 const closes = (klineBySymbol[symbol]?.candles ?? []).map((c) => c.close).filter((x) => Number.isFinite(x))
-                const phase = phaseBySymbol[symbol] ?? ''
+                const phase = finalPhase(symbol)
+                const isManual = !!phaseOverrides[symbol]
                 const isState = stateOwnedBySymbol[symbol] ?? false
                 return (
                   <div key={symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-1.5 text-xs">
                     <div className="col-span-1">
-                      {phase ? (
-                        <span
-                          className={cn(
-                            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold',
-                            PHASE_CLASS[phase],
-                          )}
-                        >
-                          {phase}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-600">—</span>
-                      )}
+                      <select
+                        value={phaseOverrides[symbol] ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v) setPhaseOverride(symbol, v)
+                          else clearPhaseOverride(symbol)
+                        }}
+                        className={cn(
+                          'w-full cursor-pointer rounded-md border bg-transparent px-1 py-0.5 text-[10px] font-semibold outline-none',
+                          isManual ? 'border-amber-700 text-amber-200' : 'border-slate-700 text-slate-300',
+                          PHASE_CLASS[phase] || PHASE_CLASS[''],
+                        )}
+                        title={isManual ? '手动设置' : '自动检测'}
+                      >
+                        {PHASE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <button
                       type="button"

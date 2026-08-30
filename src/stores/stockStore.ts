@@ -24,6 +24,7 @@ interface StockState {
   }
   similarLast: { key: string; data: SimilarStocksResponse; atISO: string } | null
   thsClassicParsedByUrl: Record<string, { codes: string[]; atISO: string }>
+  phaseOverrides: Record<string, string>
   setSelectedSymbol: (symbol: string) => void
   setStandardSymbol: (symbol: string) => void
   clearStandardSymbol: () => void
@@ -46,6 +47,8 @@ interface StockState {
   clearSimilarLast: () => void
   setThsClassicParsed: (input: { url: string; codes: string[] }) => void
   clearThsClassicParsed: (input: { url: string }) => void
+  setPhaseOverride: (symbol: string, phase: string) => void
+  clearPhaseOverride: (symbol: string) => void
 }
 
 function uniqueUpper(list: string[]): string[] {
@@ -77,6 +80,7 @@ export const useStockStore = create<StockState>()(
       },
       similarLast: null,
       thsClassicParsedByUrl: {},
+      phaseOverrides: {},
       expandedRatioKeys: {
         net_assets_over_total_assets: false,
         revenue_over_market_cap: false,
@@ -174,13 +178,26 @@ export const useStockStore = create<StockState>()(
         delete next[u]
         set({ thsClassicParsedByUrl: next })
       },
+      setPhaseOverride: (symbol, phase) => {
+        const s = symbol.toUpperCase()
+        const map = get().phaseOverrides
+        set({ phaseOverrides: { ...map, [s]: phase } })
+      },
+      clearPhaseOverride: (symbol) => {
+        const s = symbol.toUpperCase()
+        const map = get().phaseOverrides
+        if (!map[s]) return
+        const next = { ...map }
+        delete next[s]
+        set({ phaseOverrides: next })
+      },
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 14,
+      version: 15,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 14) return persisted
+        if (version >= 15) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -211,6 +228,7 @@ export const useStockStore = create<StockState>()(
           },
           similarLast: null,
           thsClassicParsedByUrl: {},
+          phaseOverrides: {},
         }
       },
     },
