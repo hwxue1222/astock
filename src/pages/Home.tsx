@@ -13,6 +13,17 @@ import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
 type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'similar'
 
+type LifelineStock = {
+  code: string
+  name: string
+  ll_date: string
+  ll_close: number
+  ll_open: number
+  ll_low: number
+  ll_volume: number
+  ll_vol_ratio: number
+}
+
 const TAB_LIST: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '📊 宏观概览' },
   { key: 'watchlist', label: '⭐ 自选股' },
@@ -23,6 +34,8 @@ const TAB_LIST: { key: TabKey; label: string }[] = [
 export default function Home() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [lifelineStocks, setLifelineStocks] = useState<LifelineStock[]>([])
+  const [lifelineLoading, setLifelineLoading] = useState(false)
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
@@ -40,6 +53,19 @@ export default function Home() {
   const [ths, setThs] = useState<ThsClassicStatsResponse | null>(null)
   const [thsLoading, setThsLoading] = useState(false)
   const [thsError, setThsError] = useState<string | null>(null)
+
+  // 加载生命线数据
+  useEffect(() => {
+    setLifelineLoading(true)
+    fetch('/watchlist_lifeline.json')
+      .then((res) => res.json())
+      .then((data: LifelineStock[]) => {
+        data.sort((a, b) => b.ll_vol_ratio - a.ll_vol_ratio)
+        setLifelineStocks(data)
+      })
+      .catch(() => setLifelineStocks([]))
+      .finally(() => setLifelineLoading(false))
+  }, [])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -188,32 +214,72 @@ export default function Home() {
         {activeTab === 'lifeline' && (
           <div className="space-y-4">
             <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
-                  <div className="text-xs text-slate-400">
-                    最近3天出现生命线（阳线+放量≥3倍）的股票，共29只
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/lifeline')}
-                  className="rounded-lg border border-slate-800 bg-sky-600 px-4 py-2 text-xs font-medium text-white hover:bg-sky-500"
-                >
-                  打开完整监控页
-                </button>
+              <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
+              <div className="text-xs text-slate-400">
+                最近3天出现生命线（阳线+放量≥3倍）的股票，共 {lifelineStocks.length} 只
               </div>
             </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-400">
-              <p className="mb-2 text-sm">生命线选股监控已独立成页</p>
-              <button
-                type="button"
-                onClick={() => navigate('/lifeline')}
-                className="rounded-lg border border-slate-800 bg-slate-900 px-6 py-2 text-sm text-slate-200 hover:bg-slate-800"
-              >
-                跳转生命线监控页 →
-              </button>
-            </div>
+
+            {lifelineLoading ? (
+              <div className="py-8 text-center text-slate-400">加载中…</div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {lifelineStocks.map((s) => (
+                  <div
+                    key={s.code}
+                    className="rounded-xl border border-slate-800 bg-slate-950 p-4 transition-transform hover:-translate-y-0.5"
+                    style={{ borderLeftWidth: '4px', borderLeftColor: s.ll_vol_ratio >= 5 ? '#f59e0b' : '#0ea5e9' }}
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-base font-bold text-slate-100">{s.code.split('.')[0]}</div>
+                        <div className="text-xs text-slate-400">{s.name}</div>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${
+                          s.ll_vol_ratio >= 5 ? 'bg-amber-500' : 'bg-sky-500'
+                        }`}
+                      >
+                        放量 {s.ll_vol_ratio.toFixed(2)}x
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg bg-slate-900 p-2 text-center">
+                        <div className="text-[11px] text-slate-400">生命线日期</div>
+                        <div className="text-sm font-semibold text-slate-100">{s.ll_date}</div>
+                      </div>
+                      <div className="rounded-lg bg-slate-900 p-2 text-center">
+                        <div className="text-[11px] text-slate-400">收盘价</div>
+                        <div className="text-sm font-semibold text-emerald-400">{s.ll_close.toFixed(2)}</div>
+                      </div>
+                      <div className="rounded-lg bg-slate-900 p-2 text-center">
+                        <div className="text-[11px] text-slate-400">开盘价</div>
+                        <div className="text-sm font-semibold text-slate-100">{s.ll_open.toFixed(2)}</div>
+                      </div>
+                      <div className="rounded-lg bg-slate-900 p-2 text-center">
+                        <div className="text-[11px] text-slate-400">成交量</div>
+                        <div className="text-sm font-semibold text-amber-400">
+                          {s.ll_volume >= 100000000
+                            ? (s.ll_volume / 100000000).toFixed(1) + '亿'
+                            : s.ll_volume >= 10000
+                            ? (s.ll_volume / 10000).toFixed(0) + '万'
+                            : s.ll_volume}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/stocks/${encodeURIComponent(s.code.split('.')[0])}`)}
+                      className="mt-3 w-full rounded-lg border border-slate-800 bg-slate-900 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
+                    >
+                      查看详情
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
