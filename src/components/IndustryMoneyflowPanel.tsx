@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { getIndustryMoneyflow } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import type { IndustryMoneyflowItem } from '@/types/stock'
@@ -15,12 +16,15 @@ function formatPct(n: number | undefined): string {
   return `${n.toFixed(2)}%`
 }
 
+type SortDir = 'desc' | 'asc' | null
+
 export default function IndustryMoneyflowPanel(): JSX.Element {
   const [items, setItems] = useState<IndustryMoneyflowItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mode, setMode] = useState<'all' | 'pos' | 'neg'>('all')
   const [page, setPage] = useState(1)
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
   const pageSize = 10
 
   useEffect(() => {
@@ -50,9 +54,18 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
         ? items.filter((x) => x.netInflowRate >= 0)
         : mode === 'neg'
           ? items.filter((x) => x.netInflowRate < 0)
-          : items
+          : [...items]
+
+    // 按净流入排序
+    if (sortDir) {
+      xs.sort((a, b) => {
+        const av = a.netInflowWan ?? 0
+        const bv = b.netInflowWan ?? 0
+        return sortDir === 'desc' ? bv - av : av - bv
+      })
+    }
     return xs
-  }, [items, mode])
+  }, [items, mode, sortDir])
 
   const totalPages = useMemo(() => {
     return Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -66,7 +79,17 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
 
   useEffect(() => {
     setPage(1)
-  }, [mode])
+  }, [mode, sortDir])
+
+  const toggleSort = () => {
+    setSortDir((d) => {
+      if (d === 'desc') return 'asc'
+      if (d === 'asc') return 'desc'
+      return 'desc'
+    })
+  }
+
+  const SortIcon = sortDir === 'desc' ? ArrowDown : sortDir === 'asc' ? ArrowUp : ArrowUpDown
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -159,7 +182,16 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
               <div className="col-span-2 text-right">涨跌幅</div>
               <div className="col-span-2 text-right">流入</div>
               <div className="col-span-2 text-right">流出</div>
-              <div className="col-span-2 text-right">净流入</div>
+              <div className="col-span-2 flex items-center justify-end gap-1">
+                <button
+                  type="button"
+                  onClick={toggleSort}
+                  className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+                >
+                  净流入
+                  <SortIcon className="h-3 w-3" />
+                </button>
+              </div>
               <div className="col-span-1 text-right">净流入率</div>
             </div>
             <div className="divide-y divide-slate-800">
