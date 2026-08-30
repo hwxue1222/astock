@@ -112,7 +112,7 @@ export default function KlineChart(props: {
       }
 
       // 绘制底部半年度日期标签
-      ctx.fillStyle = 'rgba(148,163,184,0.55)'
+      ctx.fillStyle = 'rgba(203,213,225,0.9)'
       ctx.font = '10px sans-serif'
       ctx.textAlign = 'center'
 
