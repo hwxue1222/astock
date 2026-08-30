@@ -54,7 +54,7 @@ export default function KlineChart(props: {
 
       const padX = 8
       const padTop = 8
-      const padBottom = 22
+      const padBottom = 32
       const volH = Math.max(48, Math.floor(height * 0.25))
       const priceH = Math.max(80, height - volH - padTop - padBottom)
 
@@ -112,8 +112,8 @@ export default function KlineChart(props: {
       }
 
       // 绘制底部半年度日期标签
-      ctx.fillStyle = 'rgba(203,213,225,0.9)'
-      ctx.font = '10px sans-serif'
+      ctx.fillStyle = 'rgba(255,255,255,0.95)'
+      ctx.font = 'bold 14px sans-serif'
       ctx.textAlign = 'center'
 
       const labelInterval = Math.max(60, Math.floor(n / 4))
@@ -121,7 +121,7 @@ export default function KlineChart(props: {
         const x = midX(i)
         const dateStr = c[i].ts // YYYY-MM-DD
         const label = dateStr.slice(0, 7) // YYYY-MM
-        ctx.fillText(label, x, height - 4)
+        ctx.fillText(label, x, height - 8)
       }
     }
 

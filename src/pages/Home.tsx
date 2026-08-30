@@ -36,6 +36,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [lifelineStocks, setLifelineStocks] = useState<LifelineStock[]>([])
   const [lifelineLoading, setLifelineLoading] = useState(false)
+  const [showPickTip, setShowPickTip] = useState(false)
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
@@ -213,73 +214,119 @@ export default function Home() {
         {/* 🎯 生命线选股 */}
         {activeTab === 'lifeline' && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
-              <div className="text-xs text-slate-400">
-                最近3天出现生命线（阳线+放量≥3倍）的股票，共 {lifelineStocks.length} 只
+            <div className="rounded-2xl border border-slate-800 bg-slate-950">
+              <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
+                  <div className="text-xs text-slate-400">
+                    最近3天出现生命线（阳线+放量≥3倍）| 共 {lifelineStocks.length} 只
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPickTip(!showPickTip)}
+                    className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+                  >
+                    🚀 选股
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="inline-flex items-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"
+                  >
+                    刷新
+                  </button>
+                </div>
+              </div>
+
+              {showPickTip && (
+                <div className="mx-4 mt-3 rounded-lg border border-amber-800 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">
+                  请在本地运行 <code className="rounded bg-slate-900 px-1 py-0.5 text-slate-200">lifeline_scan.py</code> 脚本进行A股扫描选股，
+                  扫描结果将保存到 <code className="rounded bg-slate-900 px-1 py-0.5 text-slate-200">watchlist_lifeline.json</code>，
+                  然后点击"刷新"即可更新列表。
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="bg-slate-900/40 text-xs text-slate-300">
+                    <tr>
+                      <th className="px-4 py-3">序号</th>
+                      <th className="px-4 py-3">代码</th>
+                      <th className="px-4 py-3">生命线日期</th>
+                      <th className="px-4 py-3">收盘价</th>
+                      <th className="px-4 py-3">开盘价</th>
+                      <th className="px-4 py-3">最低价</th>
+                      <th className="px-4 py-3">成交量</th>
+                      <th className="px-4 py-3">放量倍数</th>
+                      <th className="px-4 py-3">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lifelineLoading ? (
+                      <tr>
+                        <td className="px-4 py-4 text-slate-400" colSpan={9}>
+                          加载中…
+                        </td>
+                      </tr>
+                    ) : lifelineStocks.length ? (
+                      lifelineStocks.map((s, i) => (
+                        <tr
+                          key={s.code}
+                          className="border-t border-slate-800 hover:bg-slate-900/40"
+                        >
+                          <td className="px-4 py-3 text-slate-400">{i + 1}</td>
+                          <td className="px-4 py-3">
+                            <div className="text-sm font-semibold text-slate-100">
+                              {s.code.split('.')[0]}
+                            </div>
+                            <div className="text-xs text-slate-400">{s.name}</div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-200">{s.ll_date}</td>
+                          <td className="px-4 py-3 text-emerald-400">{s.ll_close.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-slate-200">{s.ll_open.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-slate-200">{s.ll_low.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-amber-400">
+                            {s.ll_volume >= 100000000
+                              ? (s.ll_volume / 100000000).toFixed(1) + '亿'
+                              : s.ll_volume >= 10000
+                              ? (s.ll_volume / 10000).toFixed(0) + '万'
+                              : s.ll_volume}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-bold text-white ${
+                                s.ll_vol_ratio >= 5 ? 'bg-amber-500' : 'bg-sky-500'
+                              }`}
+                            >
+                              {s.ll_vol_ratio.toFixed(2)}x
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(`/stocks/${encodeURIComponent(s.code.split('.')[0])}`)
+                              }
+                              className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
+                            >
+                              查看详情
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="px-4 py-4 text-slate-400" colSpan={9}>
+                          暂无生命线股票，点击"选股"按钮扫描A股
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-
-            {lifelineLoading ? (
-              <div className="py-8 text-center text-slate-400">加载中…</div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {lifelineStocks.map((s) => (
-                  <div
-                    key={s.code}
-                    className="rounded-xl border border-slate-800 bg-slate-950 p-4 transition-transform hover:-translate-y-0.5"
-                    style={{ borderLeftWidth: '4px', borderLeftColor: s.ll_vol_ratio >= 5 ? '#f59e0b' : '#0ea5e9' }}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <div>
-                        <div className="text-base font-bold text-slate-100">{s.code.split('.')[0]}</div>
-                        <div className="text-xs text-slate-400">{s.name}</div>
-                      </div>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${
-                          s.ll_vol_ratio >= 5 ? 'bg-amber-500' : 'bg-sky-500'
-                        }`}
-                      >
-                        放量 {s.ll_vol_ratio.toFixed(2)}x
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-slate-900 p-2 text-center">
-                        <div className="text-[11px] text-slate-400">生命线日期</div>
-                        <div className="text-sm font-semibold text-slate-100">{s.ll_date}</div>
-                      </div>
-                      <div className="rounded-lg bg-slate-900 p-2 text-center">
-                        <div className="text-[11px] text-slate-400">收盘价</div>
-                        <div className="text-sm font-semibold text-emerald-400">{s.ll_close.toFixed(2)}</div>
-                      </div>
-                      <div className="rounded-lg bg-slate-900 p-2 text-center">
-                        <div className="text-[11px] text-slate-400">开盘价</div>
-                        <div className="text-sm font-semibold text-slate-100">{s.ll_open.toFixed(2)}</div>
-                      </div>
-                      <div className="rounded-lg bg-slate-900 p-2 text-center">
-                        <div className="text-[11px] text-slate-400">成交量</div>
-                        <div className="text-sm font-semibold text-amber-400">
-                          {s.ll_volume >= 100000000
-                            ? (s.ll_volume / 100000000).toFixed(1) + '亿'
-                            : s.ll_volume >= 10000
-                            ? (s.ll_volume / 10000).toFixed(0) + '万'
-                            : s.ll_volume}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/stocks/${encodeURIComponent(s.code.split('.')[0])}`)}
-                      className="mt-3 w-full rounded-lg border border-slate-800 bg-slate-900 py-1.5 text-xs text-slate-200 hover:bg-slate-800"
-                    >
-                      查看详情
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
