@@ -11,8 +11,18 @@ import { getThsClassicStats, getUniverse } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
+type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'similar'
+
+const TAB_LIST: { key: TabKey; label: string }[] = [
+  { key: 'overview', label: '📊 宏观概览' },
+  { key: 'watchlist', label: '⭐ 自选股' },
+  { key: 'lifeline', label: '🎯 生命线选股' },
+  { key: 'similar', label: '🔍 相似股票' },
+]
+
 export default function Home() {
   const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
@@ -101,53 +111,56 @@ export default function Home() {
         onOpenDetail={null}
       />
 
+      {/* 顶部导航标签 */}
+      <div className="mx-auto max-w-[1440px] px-4 pt-4">
+        <div className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-950 p-2">
+          {TAB_LIST.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="mx-auto max-w-[1440px] px-4 py-4">
-        <div className="space-y-4">
-          <ThsClassicStatsPanel
-            data={ths}
-            universe={universe}
-            loading={thsLoading}
-            error={thsError}
-            onRefresh={() => {
-              const ac = new AbortController()
-              setThsLoading(true)
-              setThsError(null)
-              getThsClassicStats(ac.signal)
-                .then((d) => setThs(d))
-                .catch((e: unknown) => {
-                  setThsError(e instanceof Error ? e.message : String(e))
-                  setThs(null)
-                })
-                .finally(() => setThsLoading(false))
-            }}
-          />
-
-          <MarketBreadthPanel />
-
-          <IndustryMoneyflowPanel />
-
+        {/* 📊 宏观概览 */}
+        {activeTab === 'overview' && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
-                  <div className="text-xs text-slate-400">最近3天出现生命线（阳线+放量≥3倍）的股票</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/lifeline')}
-                  className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
-                >
-                  查看监控
-                </button>
-              </div>
-            </div>
-            <SimilarStocksPanel
-              targetSymbol={standardSymbol ?? '002829'}
-              klt={klineKlt}
-              fqt={klineFqt}
-              days={klineLimit}
+            <ThsClassicStatsPanel
+              data={ths}
+              universe={universe}
+              loading={thsLoading}
+              error={thsError}
+              onRefresh={() => {
+                const ac = new AbortController()
+                setThsLoading(true)
+                setThsError(null)
+                getThsClassicStats(ac.signal)
+                  .then((d) => setThs(d))
+                  .catch((e: unknown) => {
+                    setThsError(e instanceof Error ? e.message : String(e))
+                    setThs(null)
+                  })
+                  .finally(() => setThsLoading(false))
+              }}
             />
+            <MarketBreadthPanel />
+            <IndustryMoneyflowPanel />
+          </div>
+        )}
+
+        {/* ⭐ 自选股 */}
+        {activeTab === 'watchlist' && (
+          <div className="space-y-4">
             <SymbolsTablePanel
               title="自选股"
               symbols={watchlist}
@@ -169,7 +182,52 @@ export default function Home() {
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
             />
           </div>
-        </div>
+        )}
+
+        {/* 🎯 生命线选股 */}
+        {activeTab === 'lifeline' && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
+                  <div className="text-xs text-slate-400">
+                    最近3天出现生命线（阳线+放量≥3倍）的股票，共29只
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/lifeline')}
+                  className="rounded-lg border border-slate-800 bg-sky-600 px-4 py-2 text-xs font-medium text-white hover:bg-sky-500"
+                >
+                  打开完整监控页
+                </button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-8 text-center text-slate-400">
+              <p className="mb-2 text-sm">生命线选股监控已独立成页</p>
+              <button
+                type="button"
+                onClick={() => navigate('/lifeline')}
+                className="rounded-lg border border-slate-800 bg-slate-900 px-6 py-2 text-sm text-slate-200 hover:bg-slate-800"
+              >
+                跳转生命线监控页 →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 🔍 相似股票 */}
+        {activeTab === 'similar' && (
+          <div className="space-y-4">
+            <SimilarStocksPanel
+              targetSymbol={standardSymbol ?? '002829'}
+              klt={klineKlt}
+              fqt={klineFqt}
+              days={klineLimit}
+            />
+          </div>
+        )}
       </div>
     </div>
   )
