@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getQuote, getSimilarStocks } from '@/lib/stockApi'
+import { getQuote, getSimilarStocks, getIndustryMoneyflow } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
-import type { KlineFqt, KlineKlt, SimilarStocksResponse } from '@/types/stock'
+import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
 
 type SimilarInput = Parameters<typeof getSimilarStocks>[1]
 
@@ -40,6 +40,7 @@ export default function SimilarStocksPanel(props: {
   const [error, setError] = useState<string | null>(null)
   const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
   const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
+  const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const currentPlannedKey = useMemo(() => {
     const enabled: Array<1 | 2 | 3> = [
@@ -108,6 +109,24 @@ export default function SimilarStocksPanel(props: {
     )
     return () => ac.abort()
   }, [data, industryBySymbol])
+
+  // 获取行业资金流向（用于行业标签颜色）
+  useEffect(() => {
+    const ac = new AbortController()
+    getIndustryMoneyflow(ac.signal, { fenlei: 0 })
+      .then((d) => setIndustryFlows(d.items ?? []))
+      .catch(() => {})
+    return () => ac.abort()
+  }, [])
+
+  // 行业名称 -> 净流入状态 快速查找
+  const industryFlowMap = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const item of industryFlows) {
+      if (item.name) map.set(item.name, item.netInflowWan ?? 0)
+    }
+    return map
+  }, [industryFlows])
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
@@ -302,43 +321,59 @@ export default function SimilarStocksPanel(props: {
           <div className="text-sm text-red-200">{error}</div>
         ) : data?.top?.length ? (
           <div className="space-y-2">
-            {data.top.map((it) => (
-              <div
-                key={it.symbol}
-                className={cn(
-                  'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2',
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
-                  className="min-w-0 flex-1 text-left hover:opacity-95"
-                >
-                  <div className="truncate text-sm font-semibold text-slate-100">
-                    {it.symbol}
-                    {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
-                    {industryBySymbol[it.symbol.toUpperCase()] ? (
-                      <span className="ml-2 inline-flex max-w-28 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
-                        {industryBySymbol[it.symbol.toUpperCase()]}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
-                </button>
+            {data.top.map((it) => {
+              const symUpper = it.symbol.toUpperCase()
+              const industryName = industryBySymbol[symUpper]
+              const inflowWan = industryName ? industryFlowMap.get(industryName) : undefined
+              const isPositive = inflowWan !== undefined ? inflowWan >= 0 : null
 
-                {watchlistSet.has(it.symbol.toUpperCase()) ? (
-                  <div className="shrink-0 text-xs text-slate-500">已在自选</div>
-                ) : (
+              return (
+                <div
+                  key={it.symbol}
+                  className={cn(
+                    'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2',
+                  )}
+                >
                   <button
                     type="button"
-                    onClick={() => addToWatchlist(it.symbol)}
-                    className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                    onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
+                    className="min-w-0 flex-1 text-left hover:opacity-95"
                   >
-                    加入自选
+                    <div className="truncate text-sm font-semibold text-slate-100">
+                      {it.symbol}
+                      {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
+                      {industryName ? (
+                        <span
+                          className={cn(
+                            'ml-2 inline-flex max-w-28 items-center truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold',
+                            isPositive === true
+                              ? 'border-red-800 bg-red-950 text-red-200'
+                              : isPositive === false
+                                ? 'border-emerald-800 bg-emerald-950 text-emerald-200'
+                                : 'border-slate-800 bg-slate-900 text-slate-200',
+                          )}
+                        >
+                          {industryName}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
                   </button>
-                )}
-              </div>
-            ))}
+
+                  {watchlistSet.has(symUpper) ? (
+                    <div className="shrink-0 text-xs text-slate-500">已在自选</div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => addToWatchlist(it.symbol)}
+                      className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                    >
+                      加入自选
+                    </button>
+                  )}
+                </div>
+              )
+            })}
           </div>
         ) : (
           <div className="space-y-1 text-sm text-slate-400">

@@ -7,13 +7,15 @@ import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
-import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
+import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse, getIndustryMoneyflow } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
+import { cn } from '@/lib/utils'
 import type {
   MajorEvent,
   RiskSignalsResponse,
   StockItem,
   StockRatiosResponse,
+  IndustryMoneyflowItem,
 } from '@/types/stock'
 
 export default function StockDetail() {
@@ -45,6 +47,7 @@ export default function StockDetail() {
   const [universe, setUniverse] = useState<StockItem[]>([])
   const [quoteName, setQuoteName] = useState<string | null>(null)
   const [quoteIndustry, setQuoteIndustry] = useState<string | null>(null)
+  const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const [events, setEvents] = useState<MajorEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -87,6 +90,15 @@ export default function StockDetail() {
     if (!routeSymbol) return
     if (selectedSymbol !== routeSymbol) setSelectedSymbol(routeSymbol)
   }, [routeSymbol, selectedSymbol, setSelectedSymbol])
+
+  // 获取行业资金流向（用于行业标签颜色）
+  useEffect(() => {
+    const ac = new AbortController()
+    getIndustryMoneyflow(ac.signal, { fenlei: 0 })
+      .then((d) => setIndustryFlows(d.items ?? []))
+      .catch(() => {})
+    return () => ac.abort()
+  }, [])
 
   useEffect(() => {
     if (!routeSymbol) return
@@ -170,6 +182,12 @@ export default function StockDetail() {
   const displayName = selectedMeta?.name ?? quoteName
   const displayIndustry = quoteIndustry
 
+  // 当前行业资金流向
+  const currentIndustryFlow = useMemo(() => {
+    if (!displayIndustry || !industryFlows.length) return null
+    return industryFlows.find((f) => f.name === displayIndustry) ?? null
+  }, [displayIndustry, industryFlows])
+
   const title = `个股详情`
 
   const inWatchlist = useMemo(() => {
@@ -182,6 +200,17 @@ export default function StockDetail() {
     return blacklist.map((x) => x.toUpperCase()).includes(s)
   }, [blacklist, routeSymbol])
 
+  // 自选股翻页索引
+  const watchlistIndex = useMemo(() => {
+    if (!watchlist.length || !routeSymbol) return -1
+    return watchlist.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
+  }, [watchlist, routeSymbol])
+
+  const hasPrev = watchlistIndex > 0
+  const hasNext = watchlistIndex >= 0 && watchlistIndex < watchlist.length - 1
+  const prevSymbol = hasPrev ? watchlist[watchlistIndex - 1] : null
+  const nextSymbol = hasNext ? watchlist[watchlistIndex + 1] : null
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <TopBar
@@ -193,7 +222,7 @@ export default function StockDetail() {
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
-        onBack={() => navigate('/')}
+        onBack={() => navigate('/watchlist')}
         onOpenDetail={null}
       />
 
@@ -207,7 +236,16 @@ export default function StockDetail() {
                   <span className="text-slate-400"> · {displayName}</span>
                 ) : null}
                 {displayIndustry ? (
-                  <span className="ml-2 inline-flex max-w-40 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200">
+                  <span
+                    className={cn(
+                      'ml-2 inline-flex max-w-40 items-center truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold',
+                      currentIndustryFlow
+                        ? currentIndustryFlow.netInflowWan >= 0
+                          ? 'border-red-800 bg-red-950 text-red-200'
+                          : 'border-emerald-800 bg-emerald-950 text-emerald-200'
+                        : 'border-slate-800 bg-slate-900 text-slate-200',
+                    )}
+                  >
                     {displayIndustry}
                   </span>
                 ) : null}
@@ -218,6 +256,48 @@ export default function StockDetail() {
               <div className="mt-1 text-xs text-slate-500">事件时间线 · 信号解释 · 财务比率口径</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* 自选股翻页按钮 */}
+              {watchlistIndex >= 0 ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!hasPrev}
+                    onClick={() => {
+                      if (prevSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(prevSymbol)}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      hasPrev
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    上一只
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!hasNext}
+                    onClick={() => {
+                      if (nextSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(nextSymbol)}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      hasNext
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    下一只
+                  </button>
+                </>
+              ) : null}
+
               <button
                 type="button"
                 disabled={inWatchlist}

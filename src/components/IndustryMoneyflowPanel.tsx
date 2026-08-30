@@ -95,7 +95,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-100">行业资金流向</div>
+          <div className="text-sm font-semibold r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`">行业资金流向</div>
           <div className="text-xs text-slate-500">来源：新浪资金流向</div>
         </div>
 
@@ -106,7 +106,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
             className={cn(
               'rounded-lg border px-2 py-1 text-xs font-semibold',
               mode === 'all'
-                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                ? 'border-slate-700 bg-slate-800 r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`'
                 : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
             )}
           >
@@ -118,7 +118,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
             className={cn(
               'rounded-lg border px-2 py-1 text-xs font-semibold',
               mode === 'pos'
-                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                ? 'border-slate-700 bg-slate-800 r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`'
                 : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
             )}
           >
@@ -130,7 +130,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
             className={cn(
               'rounded-lg border px-2 py-1 text-xs font-semibold',
               mode === 'neg'
-                ? 'border-slate-700 bg-slate-800 text-slate-100'
+                ? 'border-slate-700 bg-slate-800 r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`'
                 : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
             )}
           >
@@ -186,7 +186,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
                 <button
                   type="button"
                   onClick={toggleSort}
-                  className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:text-slate-100"
+                  className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800 hover:r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`"
                 >
                   净流入
                   <SortIcon className="h-3 w-3" />
@@ -200,7 +200,7 @@ export default function IndustryMoneyflowPanel(): JSX.Element {
                 return (
                   <div key={r.name} className="grid grid-cols-12 items-center px-3 py-2 text-xs">
                     <div className="col-span-3 min-w-0">
-                      <div className="truncate font-semibold text-slate-100">{r.name}</div>
+                      <div className="truncate font-semibold r.netInflowWan >= 0 ? `text-red-200` : `text-emerald-200`">{r.name}</div>
                       {r.leadingName ? (
                         <div className="truncate text-[11px] text-slate-500">领涨：{r.leadingName}</div>
                       ) : null}
