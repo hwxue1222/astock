@@ -8,6 +8,7 @@ import {
   pickMarketCapYuanFromDataset,
 } from '../providers/ashareSinaSpot.js'
 import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.js'
+import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getTencentKline } from '../providers/tencentKline.js'
