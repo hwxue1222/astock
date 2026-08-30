@@ -1,8 +1,28 @@
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, ArrowUpDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { getKline, getQuote, getRatios } from '@/lib/stockApi'
+import { getKline, getQuote, getRatios, getSurvey } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
-import type { StockItem, StockKlineResponse, StockRatiosResponse } from '@/types/stock'
+import type { StockItem, StockKlineResponse, StockRatiosResponse, KlineCandle } from '@/types/stock'
+
+type StockPhase = '吸筹中' | '出现生命线' | '洗盘中' | '准备拉升' | '出货中' | ''
+
+const PHASE_ORDER: Record<StockPhase, number> = {
+  '吸筹中': 0,
+  '出现生命线': 1,
+  '洗盘中': 2,
+  '准备拉升': 3,
+  '出货中': 4,
+  '': 99,
+}
+
+const PHASE_CLASS: Record<StockPhase, string> = {
+  '吸筹中': 'border-slate-700 bg-slate-900 text-slate-300',
+  '出现生命线': 'border-sky-700 bg-sky-950 text-sky-200',
+  '洗盘中': 'border-amber-700 bg-amber-950 text-amber-200',
+  '准备拉升': 'border-emerald-700 bg-emerald-950 text-emerald-200',
+  '出货中': 'border-red-800 bg-red-950 text-red-200',
+  '': 'border-slate-800 bg-slate-950 text-slate-500',
+}
 
 function normalizeAshareCode(input: string): string {
   const raw = String(input ?? '').trim().toUpperCase()
@@ -44,6 +64,102 @@ function sparklinePoints(closes: number[], w = 110, h = 28): string {
     .join(' ')
 }
 
+function detectPhase(candles: KlineCandle[]): StockPhase {
+  if (candles.length < 5) return ''
+
+  // 从后往前找生命线（最近5天内）
+  const lookback = Math.min(5, candles.length)
+  for (let i = candles.length - lookback; i < candles.length; i++) {
+    const c = candles[i]
+    if (c.close < c.open) continue // 非阳线
+
+    // 需要前3天成交量数据
+    if (i < 3) continue
+    const volMax3 = Math.max(
+      candles[i - 1].volume,
+      candles[i - 2].volume,
+      candles[i - 3].volume,
+    )
+    if (volMax3 <= 0) continue
+
+    const volRatio = c.volume / volMax3
+    if (volRatio >= 3.0) {
+      // 找到生命线
+      const llClose = c.close
+      const llLow = c.low
+      const llVolume = c.volume
+      const afterLL = candles.slice(i + 1)
+
+      if (afterLL.length === 0) return '出现生命线'
+
+      // 检查是否跌破生命线 (>2%)
+      const minLowAfter = Math.min(...afterLL.map((k) => k.low))
+      if (minLowAfter < llLow * 0.98) {
+        return '吸筹中'
+      }
+
+      // 找起涨点：阳线+收盘价>生命线收盘价+放量
+      for (const k of afterLL) {
+        if (k.close > llClose && k.close >= k.open) {
+          const ki = candles.indexOf(k)
+          if (ki >= 3) {
+            const qvMax = Math.max(
+              candles[ki - 1].volume,
+              candles[ki - 2].volume,
+              candles[ki - 3].volume,
+            )
+            if (k.volume / Math.max(qvMax, 1) >= 2.0) {
+              // 有起涨点，判断拉升/出货
+              const latest = candles[candles.length - 1]
+              const risePct = (latest.close - k.close) / k.close * 100
+              const volRatioBenchmark = latest.volume / llVolume
+              if (risePct >= 30 && volRatioBenchmark >= 3) {
+                return '出货中'
+              }
+              if (risePct > 5) {
+                return '准备拉升'
+              }
+              return '准备拉升'
+            }
+          }
+        }
+      }
+
+      // 没有起涨点，检查是否震仓
+      const hasPullback = afterLL.some((k) => k.close < llClose)
+      const noBreakdown = afterLL.every((k) => k.low >= llLow * 0.98)
+      if (hasPullback && noBreakdown) {
+        return '洗盘中'
+      }
+
+      if (afterLL.length <= 2) return '出现生命线'
+      return '洗盘中'
+    }
+  }
+
+  // 没有生命线，判断吸筹中
+  if (candles.length >= 10) {
+    const recent = candles.slice(-10)
+    const highs = recent.map((c) => c.high)
+    const lows = recent.map((c) => c.low)
+    const rangePct = (Math.max(...highs) - Math.min(...lows)) / Math.min(...lows) * 100
+    const avgVol = recent.reduce((s, c) => s + c.volume, 0) / recent.length
+    const lastVol = recent[recent.length - 1].volume
+    if (rangePct < 8 && lastVol < avgVol * 1.3) {
+      return '吸筹中'
+    }
+  }
+
+  return ''
+}
+
+function isStateOwned(controllerType?: string, controller?: string): boolean {
+  if (!controllerType && !controller) return false
+  const text = `${controllerType || ''} ${controller || ''}`
+  const keywords = ['国有', '国资', '政府', '中央', '国资委', '地方国资', '国务院', '财政部']
+  return keywords.some((k) => text.includes(k))
+}
+
 export default function SymbolsTablePanel(props: {
   title: string
   symbols: string[]
@@ -57,12 +173,14 @@ export default function SymbolsTablePanel(props: {
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
+  const [sortByPhase, setSortByPhase] = useState(false)
 
   const [klineBySymbol, setKlineBySymbol] = useState<Record<string, StockKlineResponse>>({})
   const [ratiosBySymbol, setRatiosBySymbol] = useState<Record<string, StockRatiosResponse>>({})
   const [quoteBySymbol, setQuoteBySymbol] = useState<
     Record<string, { name?: string; industry?: string; marketCapYuan?: number; floatMarketCapYuan?: number; pe?: number }>
   >({})
+  const [stateOwnedBySymbol, setStateOwnedBySymbol] = useState<Record<string, boolean>>({})
 
   const bySymbol = useMemo(() => new Map(props.universe.map((s) => [s.symbol.toUpperCase(), s])), [props.universe])
   const items = useMemo(() => props.symbols.map((s) => ({ symbol: s.toUpperCase(), meta: bySymbol.get(s.toUpperCase()) })), [
@@ -70,15 +188,35 @@ export default function SymbolsTablePanel(props: {
     bySymbol,
   ])
 
+  // 计算每只个股的阶段
+  const phaseBySymbol = useMemo(() => {
+    const map: Record<string, StockPhase> = {}
+    for (const sym of props.symbols) {
+      const candles = klineBySymbol[sym]?.candles ?? []
+      map[sym] = detectPhase(candles)
+    }
+    return map
+  }, [props.symbols, klineBySymbol])
+
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return items
-    return items.filter(({ symbol, meta }) => {
-      const name = (meta?.name ?? quoteBySymbol[symbol]?.name ?? '').toLowerCase()
-      const industry = (quoteBySymbol[symbol]?.industry ?? '').toLowerCase()
-      return symbol.toLowerCase().includes(needle) || name.includes(needle) || industry.includes(needle)
-    })
-  }, [items, q, quoteBySymbol])
+    let list = items
+    if (needle) {
+      list = items.filter(({ symbol, meta }) => {
+        const name = (meta?.name ?? quoteBySymbol[symbol]?.name ?? '').toLowerCase()
+        const industry = (quoteBySymbol[symbol]?.industry ?? '').toLowerCase()
+        return symbol.toLowerCase().includes(needle) || name.includes(needle) || industry.includes(needle)
+      })
+    }
+    if (sortByPhase) {
+      list = [...list].sort((a, b) => {
+        const pa = phaseBySymbol[a.symbol] ?? ''
+        const pb = phaseBySymbol[b.symbol] ?? ''
+        return PHASE_ORDER[pa] - PHASE_ORDER[pb]
+      })
+    }
+    return list
+  }, [items, q, quoteBySymbol, sortByPhase, phaseBySymbol])
 
   const pageSize = 10
   const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / pageSize)), [filtered.length])
@@ -90,7 +228,7 @@ export default function SymbolsTablePanel(props: {
 
   useEffect(() => {
     setPage(1)
-  }, [q, props.symbols.length])
+  }, [q, props.symbols.length, sortByPhase])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -100,10 +238,11 @@ export default function SymbolsTablePanel(props: {
       for (const sym of uniq) {
         if (ac.signal.aborted) return
         try {
-          const [q, r, k] = await Promise.all([
+          const [q, r, k, s] = await Promise.all([
             getQuote(sym, ac.signal).catch(() => null),
             getRatios(sym, 'latest', ac.signal).catch(() => null),
             getKline(sym, { klt: '101', fqt: '1', limit: 22 }, ac.signal).catch(() => null),
+            getSurvey(sym, ac.signal).catch(() => null),
           ])
           if (ac.signal.aborted) return
           if (q)
@@ -119,6 +258,7 @@ export default function SymbolsTablePanel(props: {
             }))
           if (r) setRatiosBySymbol((m) => ({ ...m, [sym]: r }))
           if (k) setKlineBySymbol((m) => ({ ...m, [sym]: k }))
+          if (s) setStateOwnedBySymbol((m) => ({ ...m, [sym]: isStateOwned(s.controllerType, s.controller) }))
         } catch {
           continue
         }
@@ -154,6 +294,21 @@ export default function SymbolsTablePanel(props: {
             placeholder="搜索代码/名称/行业"
             className="w-40 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-500"
           />
+
+          <button
+            type="button"
+            onClick={() => setSortByPhase((v) => !v)}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-lg border px-2.5 py-2 text-xs font-semibold',
+              sortByPhase
+                ? 'border-sky-700 bg-sky-950 text-sky-200'
+                : 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800',
+            )}
+            title="按五阶段顺序排序"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5" />
+            阶段排序
+          </button>
 
           <div className="flex items-center gap-2">
             <button
@@ -213,8 +368,9 @@ export default function SymbolsTablePanel(props: {
         {filtered.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-800">
             <div className="grid grid-cols-12 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-400">
+              <div className="col-span-1 whitespace-nowrap">阶段</div>
               <div className="col-span-2 whitespace-nowrap">代码</div>
-              <div className="col-span-3 whitespace-nowrap">名称</div>
+              <div className="col-span-2 whitespace-nowrap">名称</div>
               <div className="col-span-1 whitespace-nowrap text-right">换手</div>
               <div className="col-span-1 whitespace-nowrap text-right">市值</div>
               <div className="col-span-2 whitespace-nowrap text-right">走势</div>
@@ -231,8 +387,24 @@ export default function SymbolsTablePanel(props: {
                 const name = meta?.name ?? quoteBySymbol[symbol]?.name
                 const mktCap = quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap
                 const closes = (klineBySymbol[symbol]?.candles ?? []).map((c) => c.close).filter((x) => Number.isFinite(x))
+                const phase = phaseBySymbol[symbol] ?? ''
+                const isState = stateOwnedBySymbol[symbol] ?? false
                 return (
                   <div key={symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-1.5 text-xs">
+                    <div className="col-span-1">
+                      {phase ? (
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold',
+                            PHASE_CLASS[phase],
+                          )}
+                        >
+                          {phase}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-600">—</span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => props.onOpen(symbol)}
@@ -240,10 +412,15 @@ export default function SymbolsTablePanel(props: {
                     >
                       {symbol}
                     </button>
-                    <div className="col-span-3 min-w-0 truncate text-slate-300">
+                    <div className="col-span-2 min-w-0 truncate text-slate-300">
                       <span className="truncate">{name ?? '—'}</span>
+                      {isState ? (
+                        <span className="ml-1 inline-flex items-center rounded-md border border-amber-800 bg-amber-950 px-1.5 py-0.5 text-[10px] font-semibold text-amber-200">
+                          国资
+                        </span>
+                      ) : null}
                       {industry ? (
-                        <span className="ml-2 inline-flex max-w-28 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 align-middle text-[10px] font-semibold text-slate-200">
+                        <span className="ml-1 inline-flex max-w-28 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 align-middle text-[10px] font-semibold text-slate-200">
                           {industry}
                         </span>
                       ) : null}

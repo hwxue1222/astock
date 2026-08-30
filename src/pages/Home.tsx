@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import SimilarStocksPanel from '@/components/SimilarStocksPanel'
 import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import IndustryMoneyflowPanel from '@/components/IndustryMoneyflowPanel'
@@ -33,6 +33,7 @@ const TAB_LIST: { key: TabKey; label: string }[] = [
 
 export default function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [lifelineStocks, setLifelineStocks] = useState<LifelineStock[]>([])
   const [lifelineLoading, setLifelineLoading] = useState(false)
@@ -54,6 +55,15 @@ export default function Home() {
   const [ths, setThs] = useState<ThsClassicStatsResponse | null>(null)
   const [thsLoading, setThsLoading] = useState(false)
   const [thsError, setThsError] = useState<string | null>(null)
+
+  // 监听路由 state，自动切换到指定标签
+  useEffect(() => {
+    const tab = (location.state as any)?.activeTab
+    if (tab && ['overview', 'watchlist', 'lifeline', 'similar'].includes(tab)) {
+      setActiveTab(tab)
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   // 加载生命线数据
   useEffect(() => {
