@@ -2,6 +2,7 @@
 """
 A股扫描：最近3天生命线选股
 每批20只，先扫前1000只
+筛选条件：阳线+放量≥3倍+当天涨幅0.1%~7%
 """
 import pandas as pd, AmazingData as ad, json, os
 
@@ -73,13 +74,21 @@ for i in range(0, len(scan_list), batch_size):
         df['vol_d3'] = df['volume'].shift(3)
         df['vol_max3'] = df[['vol_d1','vol_d2','vol_d3']].max(axis=1)
         df['vol_ratio'] = df['volume'] / df['vol_max3']
+        # 当天涨幅
+        df['pct_chg'] = (df['close'] - df['open']) / df['open'] * 100
         
         recent3 = df.iloc[-3:].copy()
-        ll_mask = recent3['is_yang'] & (recent3['vol_ratio'] >= 3.0)
+        ll_mask = (
+            recent3['is_yang']
+            & (recent3['vol_ratio'] >= 3.0)
+            & (recent3['pct_chg'] >= 0.1)
+            & (recent3['pct_chg'] <= 7.0)
+        )
         ll_recent = recent3[ll_mask]
         
         if len(ll_recent) > 0:
             ll = ll_recent.iloc[-1]
+            pct_chg = round(ll['pct_chg'], 2)
             r = {
                 'code': code,
                 'date': str(ll.name.date()),
@@ -88,10 +97,11 @@ for i in range(0, len(scan_list), batch_size):
                 'low': round(ll['low'], 2),
                 'volume': int(ll['volume']),
                 'vol_ratio': round(ll['vol_ratio'], 2),
+                'pct_chg': pct_chg,
             }
             results.append(r)
             found += 1
-            print(f"✅ {code} | {r['date']} | 收{r['close']:.2f} | 放量{r['vol_ratio']:.2f}x | 量{r['volume']:,}")
+            print(f"✅ {code} | {r['date']} | 收{r['close']:.2f} | 涨{pct_chg:.2f}% | 放量{r['vol_ratio']:.2f}x | 量{r['volume']:,}")
     
     # 每50只报告进度
     current = start_idx + i + len(batch)
@@ -117,4 +127,4 @@ if results:
     print(f"\n📈 所有命中股票（按放量倍数排序）：\n")
     results_sorted = sorted(results, key=lambda x: x['vol_ratio'], reverse=True)
     for r in results_sorted:
-        print(f"  {r['code']} | {r['date']} | 收{r['close']:.2f} | 放量{r['vol_ratio']:.2f}x | 量{r['volume']:,}")
+        print(f"  {r['code']} | {r['date']} | 收{r['close']:.2f} | 涨{r.get('pct_chg', 'N/A')}% | 放量{r['vol_ratio']:.2f}x | 量{r['volume']:,}")
