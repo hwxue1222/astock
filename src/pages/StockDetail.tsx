@@ -41,7 +41,7 @@ export default function StockDetail() {
   const toggleRatioExpanded = useStockStore((s) => s.toggleRatioExpanded)
   const toggleSignalExpanded = useStockStore((s) => s.toggleSignalExpanded)
   const setKline = useStockStore((s) => s.setKline)
-  const addToWatchlist = useStockStore((s) => s.addToWatchlist)
+  const toggleWatchlist = useStockStore((s) => s.toggleWatchlist)
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
@@ -300,11 +300,10 @@ export default function StockDetail() {
 
               <button
                 type="button"
-                disabled={inWatchlist}
-                onClick={() => addToWatchlist(routeSymbol)}
+                onClick={() => toggleWatchlist(routeSymbol)}
                 className={
                   inWatchlist
-                    ? 'rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-500'
+                    ? 'rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800'
                     : 'rounded-lg border border-slate-800 bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-white'
                 }
               >
