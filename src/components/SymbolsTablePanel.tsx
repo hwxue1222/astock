@@ -3,9 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getKline, getQuote, getRatios, getSurvey } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
-import type { StockItem, StockKlineResponse, StockRatiosResponse, KlineCandle } from '@/types/stock'
-
-type StockPhase = '吸筹中' | '出现生命线' | '洗盘中' | '准备拉升' | '出货中' | ''
+import type { StockItem, StockKlineResponse, StockRatiosResponse } from '@/types/stock'
 
 const PHASE_ORDER: Record<string, number> = {
   '吸筹中': 0,
@@ -17,7 +15,7 @@ const PHASE_ORDER: Record<string, number> = {
 }
 
 const PHASE_OPTIONS: { value: string; label: string }[] = [
-  { value: '', label: '— 自动 —' },
+  { value: '', label: '— 空白 —' },
   { value: '吸筹中', label: '吸筹中' },
   { value: '出现生命线', label: '出现生命线' },
   { value: '洗盘中', label: '洗盘中' },
@@ -74,95 +72,6 @@ function sparklinePoints(closes: number[], w = 110, h = 28): string {
     .join(' ')
 }
 
-function detectPhase(candles: KlineCandle[]): StockPhase {
-  if (candles.length < 5) return ''
-
-  // 从后往前找生命线（最近5天内）
-  const lookback = Math.min(5, candles.length)
-  for (let i = candles.length - lookback; i < candles.length; i++) {
-    const c = candles[i]
-    if (c.close < c.open) continue // 非阳线
-
-    // 需要前3天成交量数据
-    if (i < 3) continue
-    const volMax3 = Math.max(
-      candles[i - 1].volume,
-      candles[i - 2].volume,
-      candles[i - 3].volume,
-    )
-    if (volMax3 <= 0) continue
-
-    const volRatio = c.volume / volMax3
-    if (volRatio >= 3.0) {
-      // 找到生命线
-      const llClose = c.close
-      const llLow = c.low
-      const llVolume = c.volume
-      const afterLL = candles.slice(i + 1)
-
-      if (afterLL.length === 0) return '出现生命线'
-
-      // 检查是否跌破生命线 (>2%)
-      const minLowAfter = Math.min(...afterLL.map((k) => k.low))
-      if (minLowAfter < llLow * 0.98) {
-        return '吸筹中'
-      }
-
-      // 找起涨点：阳线+收盘价>生命线收盘价+放量
-      for (const k of afterLL) {
-        if (k.close > llClose && k.close >= k.open) {
-          const ki = candles.indexOf(k)
-          if (ki >= 3) {
-            const qvMax = Math.max(
-              candles[ki - 1].volume,
-              candles[ki - 2].volume,
-              candles[ki - 3].volume,
-            )
-            if (k.volume / Math.max(qvMax, 1) >= 2.0) {
-              // 有起涨点，判断拉升/出货
-              const latest = candles[candles.length - 1]
-              const risePct = (latest.close - k.close) / k.close * 100
-              const volRatioBenchmark = latest.volume / llVolume
-              if (risePct >= 30 && volRatioBenchmark >= 3) {
-                return '出货中'
-              }
-              if (risePct > 5) {
-                return '准备拉升'
-              }
-              return '准备拉升'
-            }
-          }
-        }
-      }
-
-      // 没有起涨点，检查是否震仓
-      const hasPullback = afterLL.some((k) => k.close < llClose)
-      const noBreakdown = afterLL.every((k) => k.low >= llLow * 0.98)
-      if (hasPullback && noBreakdown) {
-        return '洗盘中'
-      }
-
-      if (afterLL.length <= 2) return '出现生命线'
-      return '洗盘中'
-    }
-  }
-
-  // 没有生命线，判断吸筹中
-  if (candles.length >= 10) {
-    const recent = candles.slice(-10)
-    const highs = recent.map((c) => c.high)
-    const lows = recent.map((c) => c.low)
-    const rangePct = (Math.max(...highs) - Math.min(...lows)) / Math.min(...lows) * 100
-    const avgVol = recent.reduce((s, c) => s + c.volume, 0) / recent.length
-    const lastVol = recent[recent.length - 1].volume
-    if (rangePct < 8 && lastVol < avgVol * 1.3) {
-      return '吸筹中'
-    }
-  }
-
-  return ''
-}
-
 function isStateOwned(controllerType?: string, controller?: string): boolean {
   if (!controllerType && !controller) return false
   const text = `${controllerType || ''} ${controller || ''}`
@@ -202,21 +111,6 @@ export default function SymbolsTablePanel(props: {
     bySymbol,
   ])
 
-  // 计算每只个股的阶段（自动检测）
-  const autoPhaseBySymbol = useMemo(() => {
-    const map: Record<string, StockPhase> = {}
-    for (const sym of props.symbols) {
-      const candles = klineBySymbol[sym]?.candles ?? []
-      map[sym] = detectPhase(candles)
-    }
-    return map
-  }, [props.symbols, klineBySymbol])
-
-  // 最终阶段：用户手动设置 > 自动检测 > 空白
-  const finalPhase = (symbol: string): string => {
-    return phaseOverrides[symbol] ?? autoPhaseBySymbol[symbol] ?? ''
-  }
-
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     let list = items
@@ -229,13 +123,13 @@ export default function SymbolsTablePanel(props: {
     }
     if (sortByPhase) {
       list = [...list].sort((a, b) => {
-        const pa = finalPhase(a.symbol)
-        const pb = finalPhase(b.symbol)
+        const pa = phaseOverrides[a.symbol] ?? ''
+        const pb = phaseOverrides[b.symbol] ?? ''
         return (PHASE_ORDER[pa] ?? 99) - (PHASE_ORDER[pb] ?? 99)
       })
     }
     return list
-  }, [items, q, quoteBySymbol, sortByPhase, autoPhaseBySymbol, phaseOverrides])
+  }, [items, q, quoteBySymbol, sortByPhase, phaseOverrides])
 
   const pageSize = 10
   const totalPages = useMemo(() => Math.max(1, Math.ceil(filtered.length / pageSize)), [filtered.length])
@@ -406,8 +300,7 @@ export default function SymbolsTablePanel(props: {
                 const name = meta?.name ?? quoteBySymbol[symbol]?.name
                 const mktCap = quoteBySymbol[symbol]?.marketCapYuan ?? ratiosBySymbol[symbol]?.fields?.marketCap
                 const closes = (klineBySymbol[symbol]?.candles ?? []).map((c) => c.close).filter((x) => Number.isFinite(x))
-                const phase = finalPhase(symbol)
-                const isManual = !!phaseOverrides[symbol]
+                const phase = phaseOverrides[symbol] ?? ''
                 const isState = stateOwnedBySymbol[symbol] ?? false
                 return (
                   <div key={symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-1.5 text-xs">
@@ -421,10 +314,8 @@ export default function SymbolsTablePanel(props: {
                         }}
                         className={cn(
                           'w-full cursor-pointer rounded-md border bg-transparent px-1 py-0.5 text-[10px] font-semibold outline-none',
-                          isManual ? 'border-amber-700 text-amber-200' : 'border-slate-700 text-slate-300',
                           PHASE_CLASS[phase] || PHASE_CLASS[''],
                         )}
-                        title={isManual ? '手动设置' : '自动检测'}
                       >
                         {PHASE_OPTIONS.map((opt) => (
                           <option key={opt.value} value={opt.value}>
