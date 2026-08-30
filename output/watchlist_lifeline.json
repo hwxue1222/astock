@@ -1,0 +1,262 @@
+[
+  {
+    "code": "600479.SH",
+    "name": "千金药业",
+    "ll_date": "2026-08-27",
+    "ll_close": 12.12,
+    "ll_vol_ratio": 4.85,
+    "ll_volume": 108076729,
+    "ll_open": 12.0,
+    "ll_low": 11.6
+  },
+  {
+    "code": "600095.SH",
+    "name": "湘财股份",
+    "ll_date": "2026-08-26",
+    "ll_close": 8.67,
+    "ll_vol_ratio": 4.02,
+    "ll_volume": 81698921,
+    "ll_open": 7.88,
+    "ll_low": 7.87
+  },
+  {
+    "code": "603600.SH",
+    "name": "永艺股份",
+    "ll_date": "2026-08-27",
+    "ll_close": 9.96,
+    "ll_vol_ratio": 3.19,
+    "ll_volume": 12441250,
+    "ll_open": 9.55,
+    "ll_low": 9.5
+  },
+  {
+    "code": "603559.SH",
+    "name": "中通国脉",
+    "ll_date": "2026-08-28",
+    "ll_close": 9.58,
+    "ll_vol_ratio": 3.29,
+    "ll_volume": 28195643,
+    "ll_open": 8.73,
+    "ll_low": 8.7
+  },
+  {
+    "code": "688365.SH",
+    "name": "光云科技",
+    "ll_date": "2026-08-28",
+    "ll_close": 14.89,
+    "ll_vol_ratio": 3.66,
+    "ll_volume": 31740654,
+    "ll_open": 14.66,
+    "ll_low": 14.46
+  },
+  {
+    "code": "603822.SH",
+    "name": "ST嘉澳",
+    "ll_date": "2026-08-28",
+    "ll_close": 61.52,
+    "ll_vol_ratio": 3.48,
+    "ll_volume": 1753800,
+    "ll_open": 57.59,
+    "ll_low": 57.29
+  },
+  {
+    "code": "600278.SH",
+    "name": "东方创业",
+    "ll_date": "2026-08-28",
+    "ll_close": 6.67,
+    "ll_vol_ratio": 4.52,
+    "ll_volume": 19770761,
+    "ll_open": 6.47,
+    "ll_low": 6.44
+  },
+  {
+    "code": "600999.SH",
+    "name": "招商证券",
+    "ll_date": "2026-08-26",
+    "ll_close": 18.58,
+    "ll_vol_ratio": 3.37,
+    "ll_volume": 132564737,
+    "ll_open": 17.77,
+    "ll_low": 17.76
+  },
+  {
+    "code": "688095.SH",
+    "name": "福昕软件",
+    "ll_date": "2026-08-28",
+    "ll_close": 62.18,
+    "ll_vol_ratio": 3.57,
+    "ll_volume": 7857751,
+    "ll_open": 60.5,
+    "ll_low": 59.66
+  },
+  {
+    "code": "600621.SH",
+    "name": "华鑫股份",
+    "ll_date": "2026-08-26",
+    "ll_close": 13.23,
+    "ll_vol_ratio": 3.03,
+    "ll_volume": 15006977,
+    "ll_open": 12.82,
+    "ll_low": 12.82
+  },
+  {
+    "code": "603587.SH",
+    "name": "地素时尚",
+    "ll_date": "2026-08-28",
+    "ll_close": 12.33,
+    "ll_vol_ratio": 3.86,
+    "ll_volume": 7391417,
+    "ll_open": 12.21,
+    "ll_low": 12.18
+  },
+  {
+    "code": "601162.SH",
+    "name": "天风证券",
+    "ll_date": "2026-08-26",
+    "ll_close": 3.78,
+    "ll_vol_ratio": 3.35,
+    "ll_volume": 281047174,
+    "ll_open": 3.63,
+    "ll_low": 3.63
+  },
+  {
+    "code": "688680.SH",
+    "name": "海优新材",
+    "ll_date": "2026-08-28",
+    "ll_close": 35.4,
+    "ll_vol_ratio": 3.2,
+    "ll_volume": 3614715,
+    "ll_open": 35.01,
+    "ll_low": 34.71
+  },
+  {
+    "code": "688798.SH",
+    "name": "艾为电子",
+    "ll_date": "2026-08-27",
+    "ll_close": 61.93,
+    "ll_vol_ratio": 3.12,
+    "ll_volume": 10458848,
+    "ll_open": 53.88,
+    "ll_low": 53.83
+  },
+  {
+    "code": "688561.SH",
+    "name": "奇安信-U",
+    "ll_date": "2026-08-28",
+    "ll_close": 27.13,
+    "ll_vol_ratio": 6.45,
+    "ll_volume": 23014209,
+    "ll_open": 27.0,
+    "ll_low": 26.78
+  },
+  {
+    "code": "605277.SH",
+    "name": "新亚电子",
+    "ll_date": "2026-08-27",
+    "ll_close": 17.0,
+    "ll_vol_ratio": 3.38,
+    "ll_volume": 35669549,
+    "ll_open": 16.44,
+    "ll_low": 16.19
+  },
+  {
+    "code": "600035.SH",
+    "name": "楚天高速",
+    "ll_date": "2026-08-27",
+    "ll_close": 3.63,
+    "ll_vol_ratio": 5.04,
+    "ll_volume": 74263337,
+    "ll_open": 3.62,
+    "ll_low": 3.54
+  },
+  {
+    "code": "603100.SH",
+    "name": "川仪股份",
+    "ll_date": "2026-08-28",
+    "ll_close": 19.05,
+    "ll_vol_ratio": 3.79,
+    "ll_volume": 16616320,
+    "ll_open": 17.99,
+    "ll_low": 17.93
+  },
+  {
+    "code": "605339.SH",
+    "name": "南侨食品",
+    "ll_date": "2026-08-27",
+    "ll_close": 14.45,
+    "ll_vol_ratio": 3.32,
+    "ll_volume": 9397800,
+    "ll_open": 14.23,
+    "ll_low": 14.16
+  },
+  {
+    "code": "601515.SH",
+    "name": "衢州东峰",
+    "ll_date": "2026-08-27",
+    "ll_close": 3.55,
+    "ll_vol_ratio": 3.05,
+    "ll_volume": 35077060,
+    "ll_open": 3.43,
+    "ll_low": 3.4
+  },
+  {
+    "code": "688269.SH",
+    "name": "凯立新材",
+    "ll_date": "2026-08-27",
+    "ll_close": 30.0,
+    "ll_vol_ratio": 3.48,
+    "ll_volume": 4270619,
+    "ll_open": 29.0,
+    "ll_low": 28.02
+  },
+  {
+    "code": "601222.SH",
+    "name": "林洋能源",
+    "ll_date": "2026-08-28",
+    "ll_close": 6.09,
+    "ll_vol_ratio": 6.17,
+    "ll_volume": 98731382,
+    "ll_open": 5.83,
+    "ll_low": 5.81
+  },
+  {
+    "code": "688209.SH",
+    "name": "英集芯",
+    "ll_date": "2026-08-28",
+    "ll_close": 29.54,
+    "ll_vol_ratio": 3.06,
+    "ll_volume": 60424978,
+    "ll_open": 23.9,
+    "ll_low": 23.9
+  },
+  {
+    "code": "600133.SH",
+    "name": "东湖高新",
+    "ll_date": "2026-08-28",
+    "ll_close": 8.72,
+    "ll_vol_ratio": 3.14,
+    "ll_volume": 37908372,
+    "ll_open": 8.3,
+    "ll_low": 8.27
+  },
+  {
+    "code": "688716.SH",
+    "name": "中研股份",
+    "ll_date": "2026-08-28",
+    "ll_close": 28.64,
+    "ll_vol_ratio": 3.62,
+    "ll_volume": 5140474,
+    "ll_open": 27.75,
+    "ll_low": 27.54
+  },
+  {
+    "code": "688790.SH",
+    "name": "昂瑞微-UW",
+    "ll_date": "2026-08-27",
+    "ll_close": 114.1,
+    "ll_vol_ratio": 6.98,
+    "ll_volume": 1873670,
+    "ll_open": 103.88,
+    "ll_low": 103.88
+  }
+]
