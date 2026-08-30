@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, ArrowLeft, ExternalLink } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, ArrowLeft, ExternalLink, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { StockItem } from '@/types/stock'
 
@@ -12,6 +13,7 @@ export default function TopBar(props: {
   onBack?: (() => void) | null
   onOpenDetail?: (() => void) | null
 }) {
+  const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement | null>(null)
@@ -123,6 +125,16 @@ export default function TopBar(props: {
             </div>
           ) : null}
         </div>
+
+        {/* 自选股看板入口 */}
+        <button
+          type="button"
+          onClick={() => navigate('/watchlist')}
+          className="hidden items-center gap-1 rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 md:inline-flex"
+        >
+          <Star className="h-3.5 w-3.5" />
+          自选
+        </button>
 
         <div className="hidden items-center gap-3 text-xs text-slate-400 md:flex">
           <div className="whitespace-nowrap">
