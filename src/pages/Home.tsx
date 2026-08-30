@@ -127,6 +127,21 @@ export default function Home() {
           <IndustryMoneyflowPanel />
 
           <div className="space-y-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
+                  <div className="text-xs text-slate-400">最近3天出现生命线（阳线+放量≥3倍）的股票</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/lifeline')}
+                  className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-200 hover:bg-slate-800"
+                >
+                  查看监控
+                </button>
+              </div>
+            </div>
             <SimilarStocksPanel
               targetSymbol={standardSymbol ?? '002829'}
               klt={klineKlt}
