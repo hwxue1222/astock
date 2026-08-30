@@ -177,6 +177,19 @@ export interface StockQuoteResponse {
   pe?: number
 }
 
+export interface StockSurveyResponse {
+  symbol: string
+  controllerType?: string
+  controller?: string
+}
+  symbol: string
+  name?: string
+  industry?: string
+  marketCapYuan?: number
+  floatMarketCapYuan?: number
+  pe?: number
+}
+
 export type IndustryMoneyflowItem = {
   name: string
   avgPrice: number

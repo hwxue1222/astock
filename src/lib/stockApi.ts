@@ -11,6 +11,7 @@ import type {
   StockKlineResponse,
   StockRatiosResponse,
   StockQuoteResponse,
+  StockSurveyResponse,
   ThsClassicStatsResponse,
   ThsClassicArticleStocksResponse,
 } from '@/types/stock'
@@ -94,6 +95,14 @@ export async function getKline(
 export async function getQuote(symbol: string, signal?: AbortSignal): Promise<StockQuoteResponse> {
   const data = await fetchJson<{ success: boolean } & StockQuoteResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/quote`,
+    signal,
+  )
+  return data
+}
+
+export async function getSurvey(symbol: string, signal?: AbortSignal): Promise<StockSurveyResponse> {
+  const data = await fetchJson<{ success: boolean } & StockSurveyResponse>(
+    `/api/stocks/${encodeURIComponent(symbol)}/survey`,
     signal,
   )
   return data

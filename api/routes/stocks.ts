@@ -15,7 +15,7 @@ import { findSimilarStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
-import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
+import { getEastmoneyCompanySurvey } from '../providers/eastmoneySurvey.js'
 import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
 
 const router = Router()
@@ -184,6 +184,34 @@ router.get('/ths-classic/stocks', async (req: Request, res: Response): Promise<v
 })
 
 router.get('/:symbol/quote', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.params.symbol ?? '').toUpperCase()
+  const code = normalizeAshareCode(symbol)
+  try {
+    const out = await getEastmoneyQuote({ code, timeoutMs: 12_000 })
+    res.status(200).json({ success: true, symbol: code, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Quote provider unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/:symbol/survey', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.params.symbol ?? '').toUpperCase()
+  const code = normalizeAshareCode(symbol)
+  try {
+    const out = await getEastmoneyCompanySurvey({ code, timeoutMs: 12_000 })
+    res.status(200).json({ success: true, symbol: code, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Survey provider unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
   const symbol = String(req.params.symbol ?? '').toUpperCase()
   const code = normalizeAshareCode(symbol)
   try {

@@ -7,7 +7,7 @@ import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
-import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse, getIndustryMoneyflow } from '@/lib/stockApi'
+import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse, getIndustryMoneyflow, getSurvey } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import { cn } from '@/lib/utils'
 import type {
@@ -17,6 +17,13 @@ import type {
   StockRatiosResponse,
   IndustryMoneyflowItem,
 } from '@/types/stock'
+
+function isStateOwned(controllerType?: string, controller?: string): boolean {
+  if (!controllerType && !controller) return false
+  const text = `${controllerType || ''} ${controller || ''}`
+  const keywords = ['国有', '国资', '政府', '中央', '国资委', '地方国资', '国务院', '财政部']
+  return keywords.some((k) => text.includes(k))
+}
 
 export default function StockDetail() {
   const navigate = useNavigate()
@@ -48,6 +55,7 @@ export default function StockDetail() {
   const [quoteName, setQuoteName] = useState<string | null>(null)
   const [quoteIndustry, setQuoteIndustry] = useState<string | null>(null)
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
+  const [isState, setIsState] = useState(false)
 
   const [events, setEvents] = useState<MajorEvent[]>([])
   const [eventsLoading, setEventsLoading] = useState(false)
@@ -111,6 +119,20 @@ export default function StockDetail() {
       .catch(() => {})
     return () => ac.abort()
   }, [])
+
+  // 获取公司概况（用于国资标签）
+  useEffect(() => {
+    if (!routeSymbol) return
+    const ac = new AbortController()
+    getSurvey(routeSymbol, ac.signal)
+      .then((d) => {
+        setIsState(isStateOwned(d.controllerType, d.controller))
+      })
+      .catch(() => {
+        setIsState(false)
+      })
+    return () => ac.abort()
+  }, [routeSymbol])
 
   useEffect(() => {
     if (!routeSymbol) return
@@ -223,15 +245,6 @@ export default function StockDetail() {
   const hasNext = watchlistIndex >= 0 && watchlistIndex < snapshot.length - 1
   const prevSymbol = hasPrev ? snapshot[watchlistIndex - 1] : null
   const nextSymbol = hasNext ? snapshot[watchlistIndex + 1] : null
-  const watchlistIndex = useMemo(() => {
-    if (!watchlist.length || !routeSymbol) return -1
-    return watchlist.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
-  }, [watchlist, routeSymbol])
-
-  const hasPrev = watchlistIndex > 0
-  const hasNext = watchlistIndex >= 0 && watchlistIndex < watchlist.length - 1
-  const prevSymbol = hasPrev ? watchlist[watchlistIndex - 1] : null
-  const nextSymbol = hasNext ? watchlist[watchlistIndex + 1] : null
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -256,6 +269,11 @@ export default function StockDetail() {
                 {routeSymbol}
                 {displayName ? (
                   <span className="text-slate-400"> · {displayName}</span>
+                ) : null}
+                {isState ? (
+                  <span className="ml-2 inline-flex items-center rounded-md border border-amber-800 bg-amber-950 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                    国资
+                  </span>
                 ) : null}
                 {displayIndustry ? (
                   <span
