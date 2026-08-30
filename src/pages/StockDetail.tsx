@@ -257,7 +257,7 @@ export default function StockDetail() {
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
-        onBack={() => navigate('/watchlist')}
+        onBack={() => navigate('/', { state: { activeTab: 'watchlist' } })}
         onOpenDetail={null}
       />
 
