@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import EventsFeed from '@/components/EventsFeed'
 import KlinePanel from '@/components/KlinePanel'
@@ -62,6 +62,18 @@ export default function StockDetail() {
   const [ratiosError, setRatiosError] = useState<string | null>(null)
 
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null)
+
+  // 保存进入页面时的自选股快照（取消自选后翻页仍可用）
+  const watchlistSnapshotRef = useRef<string[]>([])
+
+  useEffect(() => {
+    if (!routeSymbol) return
+    const s = routeSymbol.toUpperCase()
+    const inList = watchlist.map((x) => x.toUpperCase()).includes(s)
+    if (inList) {
+      watchlistSnapshotRef.current = [...watchlist]
+    }
+  }, [routeSymbol])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -200,7 +212,17 @@ export default function StockDetail() {
     return blacklist.map((x) => x.toUpperCase()).includes(s)
   }, [blacklist, routeSymbol])
 
-  // 自选股翻页索引
+  // 自选股翻页索引（基于快照，不受实时取消自选影响）
+  const snapshot = watchlistSnapshotRef.current
+  const watchlistIndex = useMemo(() => {
+    if (!snapshot.length || !routeSymbol) return -1
+    return snapshot.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
+  }, [snapshot, routeSymbol])
+
+  const hasPrev = watchlistIndex > 0
+  const hasNext = watchlistIndex >= 0 && watchlistIndex < snapshot.length - 1
+  const prevSymbol = hasPrev ? snapshot[watchlistIndex - 1] : null
+  const nextSymbol = hasNext ? snapshot[watchlistIndex + 1] : null
   const watchlistIndex = useMemo(() => {
     if (!watchlist.length || !routeSymbol) return -1
     return watchlist.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
