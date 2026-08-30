@@ -24,13 +24,6 @@ type LifelineStock = {
   ll_vol_ratio: number
 }
 
-const TAB_LIST: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: '📊 宏观概览' },
-  { key: 'watchlist', label: '⭐ 自选股' },
-  { key: 'lifeline', label: '🎯 生命线选股' },
-  { key: 'similar', label: '🔍 相似股票' },
-]
-
 export default function Home() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -147,26 +140,6 @@ export default function Home() {
         onBack={null}
         onOpenDetail={null}
       />
-
-      {/* 顶部导航标签 */}
-      <div className="mx-auto max-w-[1440px] px-4 pt-4">
-        <div className="flex flex-wrap gap-2 rounded-xl border border-slate-800 bg-slate-950 p-2">
-          {TAB_LIST.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="mx-auto max-w-[1440px] px-4 py-4">
         {/* 📊 宏观概览 */}
