@@ -244,7 +244,7 @@ export default function StockDetail() {
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
-        onBack={() => navigate(-1)}
+        onBack={() => navigate('/watchlist')}
         onOpenDetail={null}
       />
 
