@@ -212,20 +212,6 @@ router.get('/:symbol/survey', async (req: Request, res: Response): Promise<void>
     })
   }
 })
-  const symbol = String(req.params.symbol ?? '').toUpperCase()
-  const code = normalizeAshareCode(symbol)
-  try {
-    const out = await getEastmoneyQuote({ code, timeoutMs: 12_000 })
-    res.status(200).json({ success: true, symbol: code, ...out })
-  } catch (e: unknown) {
-    res.status(502).json({
-      success: false,
-      error: 'Quote provider unavailable (real data required)',
-      detail: errorMessage(e),
-    })
-  }
-})
-
 router.get(
   '/:symbol/events',
   async (req: Request, res: Response): Promise<void> => {

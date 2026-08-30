@@ -182,13 +182,6 @@ export interface StockSurveyResponse {
   controllerType?: string
   controller?: string
 }
-  symbol: string
-  name?: string
-  industry?: string
-  marketCapYuan?: number
-  floatMarketCapYuan?: number
-  pe?: number
-}
 
 export type IndustryMoneyflowItem = {
   name: string
