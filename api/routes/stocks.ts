@@ -617,82 +617,12 @@ router.get('/scan-lifeline', async (req: Request, res: Response): Promise<void> 
       .sort((a, b) => b.changepercent - a.changepercent)
       .slice(0, maxScan)
 
-    // 3. 并发获取K线并筛选
-    const results: Array<{
-      code: string
-      name: string
-      ll_date: string
-      ll_close: number
-      ll_open: number
-      ll_low: number
-      ll_volume: number
-      ll_vol_ratio: number
-      ll_pct_chg: number
-      turnover_check: { high_days: number; total_days: number; avg_turnover: number }
-    }> = []
-
-    await runWithConcurrency(candidates, 8, async (stock) => {
-      const kline = await getEastmoneyKline({
-        code: stock.code,
-        klt: '101',
-        fqt: '1',
-        limit: 30,
-        timeoutMs: 8000,
-      })
-      const candles = kline.candles
-      if (candles.length < 5) return
-
-      // 最近5天内找生命线
-      for (let i = Math.max(3, candles.length - 5); i < candles.length; i++) {
-        const curr = candles[i]
-        const prev3 = candles.slice(i - 3, i)
-        const maxVol3 = Math.max(...prev3.map((c) => c.volume))
-        if (!maxVol3 || maxVol3 <= 0) continue
-
-        const volRatio = curr.volume / maxVol3
-        const pctChg = ((curr.close - curr.open) / curr.open) * 100
-        const isYang = curr.close >= curr.open
-
-        if (isYang && volRatio >= 3.0 && pctChg >= 0.1 && pctChg <= 7.0) {
-          // 换手率检查（最近30天）
-          const recent30 = candles.slice(-30)
-          const highTurnoverDays = recent30.filter((c) => (c.turnover ?? 0) >= 2.0).length
-          const totalDays = recent30.length
-          const avgTurnover =
-            totalDays > 0
-              ? Math.round((recent30.reduce((s, c) => s + (c.turnover ?? 0), 0) / totalDays) * 100) / 100
-              : 0
-
-          results.push({
-            code: stock.code,
-            name: stock.name || stock.code,
-            ll_date: curr.ts,
-            ll_close: Math.round(curr.close * 100) / 100,
-            ll_open: Math.round(curr.open * 100) / 100,
-            ll_low: Math.round(curr.low * 100) / 100,
-            ll_volume: Math.round(curr.volume),
-            ll_vol_ratio: Math.round(volRatio * 100) / 100,
-            ll_pct_chg: Math.round(pctChg * 100) / 100,
-            turnover_check: {
-              high_days: highTurnoverDays,
-              total_days: totalDays,
-              avg_turnover: avgTurnover,
-            },
-          })
-          break
-        }
-      }
-    })
-
-    // 按放量倍数排序
-    results.sort((a, b) => b.ll_vol_ratio - a.ll_vol_ratio)
-
+    // 3. 返回候选列表（前端负责获取K线检测生命线）
     res.status(200).json({
       success: true,
       scanned: candidates.length,
       total_universe: allStocks.length,
-      found: results.length,
-      stocks: results,
+      candidates,
     })
   } catch (e: unknown) {
     res.status(502).json({
