@@ -54,7 +54,7 @@ export default function KlineChart(props: {
 
       const padX = 8
       const padTop = 8
-      const padBottom = 32
+      const padBottom = 44
       const volH = Math.max(48, Math.floor(height * 0.25))
       const priceH = Math.max(80, height - volH - padTop - padBottom)
 
@@ -111,17 +111,48 @@ export default function KlineChart(props: {
         ctx.fillRect(x - bodyW / 2, vy, bodyW, yVolBase - vy)
       }
 
-      // 绘制底部半年度日期标签
-      ctx.fillStyle = 'rgba(255,255,255,0.95)'
-      ctx.font = 'bold 14px sans-serif'
-      ctx.textAlign = 'center'
+      // ── 底部时间轴：日期标签 + 竖线标记 ──
+      const axisY = padTop + priceH + Math.floor(padBottom / 2) + volH
+      const labelY = height - 10
 
-      const labelInterval = Math.max(60, Math.floor(n / 4))
-      for (let i = 0; i < n; i += labelInterval) {
-        const x = midX(i)
-        const dateStr = c[i].ts // YYYY-MM-DD
-        const label = dateStr.slice(0, 7) // YYYY-MM
-        ctx.fillText(label, x, height - 8)
+      // 画一条细横线作为时间轴
+      ctx.strokeStyle = 'rgba(148,163,184,0.35)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padX, axisY)
+      ctx.lineTo(width - padX, axisY)
+      ctx.stroke()
+
+      // 选择要显示的日期标签：约每 70px 一个，确保不重叠
+      const minPxGap = 70
+      const labelCount = Math.max(2, Math.floor((width - padX * 2) / minPxGap))
+      const step = Math.max(1, Math.floor(n / labelCount))
+
+      ctx.font = 'bold 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'top'
+
+      for (let idx = 0; idx < n; idx += step) {
+        const x = midX(idx)
+        const dateStr = c[idx].ts // YYYY-MM-DD
+        const label = `${dateStr.slice(5, 7)}/${dateStr.slice(8, 10)}` // MM/DD
+
+        // 竖线标记（小竖线从轴线向下延伸）
+        ctx.strokeStyle = 'rgba(148,163,184,0.6)'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x, axisY)
+        ctx.lineTo(x, axisY + 5)
+        ctx.stroke()
+
+        // 文字描边增强对比度
+        ctx.strokeStyle = 'rgba(0,0,0,0.8)'
+        ctx.lineWidth = 3
+        ctx.strokeText(label, x, labelY)
+
+        // 文字填充
+        ctx.fillStyle = 'rgba(255,255,255,0.95)'
+        ctx.fillText(label, x, labelY)
       }
     }
 
