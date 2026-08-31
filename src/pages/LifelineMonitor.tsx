@@ -152,7 +152,7 @@ export default function LifelineMonitor() {
     })
 
     try {
-      const res = await fetch('/api/scan-lifeline')
+      const res = await fetch('/api/stocks/scan-lifeline')
       const data = await res.json()
 
       if (!data.success) {
