@@ -14,6 +14,28 @@ function hiDpi(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: n
   return { ctx, w: rect.width, h: rect.height }
 }
 
+function calcMA(period: number, closes: number[]): (number | null)[] {
+  const result: (number | null)[] = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      result.push(null)
+      continue
+    }
+    let sum = 0
+    for (let j = i - period + 1; j <= i; j++) {
+      sum += closes[j]
+    }
+    result.push(sum / period)
+  }
+  return result
+}
+
+const MA_CONFIG = [
+  { period: 5, color: 'rgba(255,255,255,0.85)', label: 'MA5' },
+  { period: 10, color: 'rgba(250,204,21,0.85)', label: 'MA10' },
+  { period: 20, color: 'rgba(168,85,247,0.85)', label: 'MA20' },
+]
+
 export default function KlineChart(props: {
   candles: KlineCandle[]
   height?: number
@@ -33,6 +55,11 @@ export default function KlineChart(props: {
     }
     if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null
     return { min, max, maxVol }
+  }, [props.candles])
+
+  const mas = useMemo(() => {
+    const closes = props.candles.map((c) => c.close)
+    return MA_CONFIG.map((cfg) => calcMA(cfg.period, closes))
   }, [props.candles])
 
   useEffect(() => {
@@ -133,7 +160,51 @@ export default function KlineChart(props: {
         ctx.fillRect(x - bodyW / 2, vy, bodyW, yVolBase - vy)
       }
 
-      // ── 5. 底部时间轴：横线 + 竖线标记 + 日期标签 ──
+      // ── 5. 均线 MA5 / MA10 / MA20 ──
+      for (let mi = 0; mi < mas.length; mi++) {
+        const values = mas[mi]
+        const cfg = MA_CONFIG[mi]
+        ctx.strokeStyle = cfg.color
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        let started = false
+        for (let i = 0; i < n; i++) {
+          const v = values[i]
+          if (v === null) continue
+          const x = midX(i)
+          const y = yPrice(v)
+          if (!started) {
+            ctx.moveTo(x, y)
+            started = true
+          } else {
+            ctx.lineTo(x, y)
+          }
+        }
+        ctx.stroke()
+      }
+
+      // ── 6. 均线图例（右上角）──
+      const legendX = width - padX - 4
+      const legendY = padTop + 4
+      ctx.font = 'bold 11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      ctx.textAlign = 'right'
+      ctx.textBaseline = 'top'
+      for (let i = 0; i < MA_CONFIG.length; i++) {
+        const cfg = MA_CONFIG[i]
+        const y = legendY + i * 16
+        // 颜色短线
+        ctx.strokeStyle = cfg.color
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(legendX - 34, y + 6)
+        ctx.lineTo(legendX - 20, y + 6)
+        ctx.stroke()
+        // 文字
+        ctx.fillStyle = cfg.color
+        ctx.fillText(cfg.label, legendX, y)
+      }
+
+      // ── 7. 底部时间轴：横线 + 竖线标记 + 日期标签 ──
       const labelY = height - 10
 
       // 时间轴横线
@@ -174,7 +245,7 @@ export default function KlineChart(props: {
 
     draw()
     return () => ro.disconnect()
-  }, [model, props.candles])
+  }, [model, mas, props.candles])
 
   return (
     <canvas
