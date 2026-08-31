@@ -255,7 +255,7 @@ export default function LifelineMonitor() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <TopBar
-        title="生命线选股监控"
+        title="5阶段策略选股""生命线选股监控"
         universe={[]}
         selectedSymbol={null}
         onSelectSymbol={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
@@ -268,6 +268,9 @@ export default function LifelineMonitor() {
         <div className="rounded-2xl border border-slate-800 bg-slate-950">
           <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
+              <div className="text-sm font-semibold text-slate-100">5阶段策略选股</div>
+              <div className="text-xs text-slate-400">
+                5阶段：吸筹→试盘→洗盘→拉升→出货 | 生命线检测
               <div className="text-sm font-semibold text-slate-100">生命线选股监控</div>
               <div className="text-xs text-slate-400">
                 {scanState.status === 'running'

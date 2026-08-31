@@ -206,6 +206,9 @@ export default function Home() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950">
               <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
+                  <div className="text-sm font-semibold text-slate-100">🎯 5阶段策略选股</div>
+                  <div className="text-xs text-slate-400">
+                    5阶段：吸筹→试盘→洗盘→拉升→出货 | 共 {lifelineStocks.length} 只
                   <div className="text-sm font-semibold text-slate-100">🎯 生命线选股监控</div>
                   <div className="text-xs text-slate-400">
                     最近3天出现生命线（阳线+放量≥3倍）| 共 {lifelineStocks.length} 只

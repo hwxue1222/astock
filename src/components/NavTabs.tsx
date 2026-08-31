@@ -6,7 +6,7 @@ type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'similar'
 const TAB_LIST: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '📊 宏观概览' },
   { key: 'watchlist', label: '⭐ 自选股' },
-  { key: 'lifeline', label: '🎯 生命线选股' },
+  { key: 'lifeline', label: '🎯 5阶段策略' },
   { key: 'similar', label: '🔍 相似股票' },
 ]
 
