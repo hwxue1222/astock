@@ -593,8 +593,8 @@ async function runWithConcurrency<T>(
 }
 
 router.get('/scan-lifeline', async (req: Request, res: Response): Promise<void> => {
-  const maxCandidates = Number(req.query.maxCandidates ?? 100)
-  const maxScan = Number.isFinite(maxCandidates) && maxCandidates > 0 ? Math.min(maxCandidates, 200) : 100
+  const maxCandidates = Number(req.query.maxCandidates ?? 1000)
+  const maxScan = Number.isFinite(maxCandidates) && maxCandidates > 0 ? Math.min(maxCandidates, 1000) : 1000
 
   try {
     // 1. 获取全A股列表
