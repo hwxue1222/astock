@@ -73,6 +73,7 @@ export default function KlineChart(props: {
         return yVolBase - (v / model.maxVol) * volH
       }
 
+      // ── 1. 水平网格线 ──
       ctx.strokeStyle = 'rgba(148,163,184,0.25)'
       ctx.lineWidth = 1
       for (let k = 0; k <= 3; k += 1) {
@@ -83,6 +84,27 @@ export default function KlineChart(props: {
         ctx.stroke()
       }
 
+      // ── 2. 计算时间轴标签位置（先算，用于纵向网格线）──
+      const axisY = padTop + priceH + Math.floor(padBottom / 2) + volH
+      const minPxGap = 70
+      const labelCount = Math.max(2, Math.floor((width - padX * 2) / minPxGap))
+      const step = Math.max(1, Math.floor(n / labelCount))
+      const labelXs: number[] = []
+      for (let idx = 0; idx < n; idx += step) {
+        labelXs.push(midX(idx))
+      }
+
+      // ── 3. 纵向网格线（对应每个时间轴标签位置）──
+      ctx.strokeStyle = 'rgba(148,163,184,0.12)'
+      ctx.lineWidth = 1
+      for (const x of labelXs) {
+        ctx.beginPath()
+        ctx.moveTo(x, padTop)
+        ctx.lineTo(x, axisY)
+        ctx.stroke()
+      }
+
+      // ── 4. K 线与成交量 ──
       for (let i = 0; i < n; i += 1) {
         const x = midX(i)
         const it = c[i]
@@ -111,22 +133,16 @@ export default function KlineChart(props: {
         ctx.fillRect(x - bodyW / 2, vy, bodyW, yVolBase - vy)
       }
 
-      // ── 底部时间轴：日期标签 + 竖线标记 ──
-      const axisY = padTop + priceH + Math.floor(padBottom / 2) + volH
+      // ── 5. 底部时间轴：横线 + 竖线标记 + 日期标签 ──
       const labelY = height - 10
 
-      // 画一条细横线作为时间轴
+      // 时间轴横线
       ctx.strokeStyle = 'rgba(148,163,184,0.35)'
       ctx.lineWidth = 1
       ctx.beginPath()
       ctx.moveTo(padX, axisY)
       ctx.lineTo(width - padX, axisY)
       ctx.stroke()
-
-      // 选择要显示的日期标签：约每 70px 一个，确保不重叠
-      const minPxGap = 70
-      const labelCount = Math.max(2, Math.floor((width - padX * 2) / minPxGap))
-      const step = Math.max(1, Math.floor(n / labelCount))
 
       ctx.font = 'bold 13px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
       ctx.textAlign = 'center'
