@@ -277,7 +277,7 @@ export default function LifelineMonitor() {
                   ? `扫描中: ${scanState.processed}/${scanState.total} (${progressPct}%) | 当前: ${scanState.currentCode} | 命中 ${scanState.found} 只`
                   : scanState.status === 'done'
                     ? `扫描完成: ${scanState.processed}/${scanState.total} | 命中 ${scanState.found} 只生命线股票`
-                    : `最近5天出现生命线（阳线+放量≥3倍+涨幅0.1%~7%）| 共 ${stocks.length} 只`}
+                    : `最近5天出现生命线（阳线+放量≥3倍）| 共 ${stocks.length} 只`}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">

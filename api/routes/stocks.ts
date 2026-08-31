@@ -613,7 +613,7 @@ router.get('/scan-lifeline', async (req: Request, res: Response): Promise<void> 
         name: String(s.name ?? '').trim(),
         changepercent: Number(s.changepercent),
       }))
-      .filter((s) => s.code && Number.isFinite(s.changepercent) && s.changepercent >= 0.1 && s.changepercent <= 7.0)
+      .filter((s) => s.code && Number.isFinite(s.changepercent) && s.changepercent > 0)
       .sort((a, b) => b.changepercent - a.changepercent)
       .slice(0, maxScan)
 
