@@ -14,6 +14,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/watchlist" element={<WatchlistDashboard />} />
           <Route path="/lifeline" element={<LifelineMonitor />} />
+          <Route path="/lifeline-monitor" element={<LifelineMonitor />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
         </Routes>
       </div>

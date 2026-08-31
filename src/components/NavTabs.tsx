@@ -29,7 +29,13 @@ export default function NavTabs(): JSX.Element {
           <button
             key={tab.key}
             type="button"
-            onClick={() => navigate('/', { state: { activeTab: tab.key } })}
+            onClick={() => {
+              if (tab.key === 'lifeline') {
+                navigate('/lifeline')
+              } else {
+                navigate('/', { state: { activeTab: tab.key } })
+              }
+            }}
             className={cn(
               'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
               activeTab === tab.key
