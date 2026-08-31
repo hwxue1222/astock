@@ -1,4 +1,4 @@
-import { Plus, Trash2, ArrowUpDown } from 'lucide-react'
+import { Plus, Trash2, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { getKline, getQuote, getRatios, getSurvey } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
@@ -88,6 +88,8 @@ export default function SymbolsTablePanel(props: {
   onAdd: (symbol: string) => void
   onRemove: (symbol: string) => void
   onOpen: (symbol: string) => void
+  onMoveUp?: (symbol: string) => void
+  onMoveDown?: (symbol: string) => void
 }): JSX.Element {
   const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
@@ -361,7 +363,27 @@ export default function SymbolsTablePanel(props: {
                     <div className={cn('col-span-1 whitespace-nowrap text-right', pctCls)}>{formatPct(pct)}</div>
                     <div className="col-span-1 whitespace-nowrap text-right text-slate-300">{formatYi(stats.amount)}</div>
 
-                    <div className="col-span-1 flex justify-end">
+                    <div className="col-span-1 flex justify-end gap-0.5">
+                      {props.onMoveUp ? (
+                        <button
+                          type="button"
+                          onClick={() => props.onMoveUp!(symbol)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                          title="上移"
+                        >
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                      {props.onMoveDown ? (
+                        <button
+                          type="button"
+                          onClick={() => props.onMoveDown!(symbol)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                          title="下移"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => props.onRemove(symbol)}

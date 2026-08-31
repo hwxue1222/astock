@@ -49,6 +49,8 @@ interface StockState {
   clearThsClassicParsed: (input: { url: string }) => void
   setPhaseOverride: (symbol: string, phase: string) => void
   clearPhaseOverride: (symbol: string) => void
+  moveWatchlistItem: (symbol: string, direction: 'up' | 'down') => void
+  moveBlacklistItem: (symbol: string, direction: 'up' | 'down') => void
 }
 
 function uniqueUpper(list: string[]): string[] {
@@ -58,6 +60,14 @@ function uniqueUpper(list: string[]): string[] {
     if (!out.includes(v)) out.push(v)
   }
   return out
+}
+
+function swapInPlace<T>(arr: T[], from: number, to: number): T[] {
+  const next = [...arr]
+  const tmp = next[from]
+  next[from] = next[to]
+  next[to] = tmp
+  return next
 }
 
 export const useStockStore = create<StockState>()(
@@ -190,6 +200,28 @@ export const useStockStore = create<StockState>()(
         const next = { ...map }
         delete next[s]
         set({ phaseOverrides: next })
+      },
+      moveWatchlistItem: (symbol, direction) => {
+        const s = symbol.toUpperCase()
+        const list = get().watchlist
+        const idx = list.indexOf(s)
+        if (idx === -1) return
+        if (direction === 'up' && idx > 0) {
+          set({ watchlist: swapInPlace(list, idx, idx - 1) })
+        } else if (direction === 'down' && idx < list.length - 1) {
+          set({ watchlist: swapInPlace(list, idx, idx + 1) })
+        }
+      },
+      moveBlacklistItem: (symbol, direction) => {
+        const s = symbol.toUpperCase()
+        const list = get().blacklist
+        const idx = list.indexOf(s)
+        if (idx === -1) return
+        if (direction === 'up' && idx > 0) {
+          set({ blacklist: swapInPlace(list, idx, idx - 1) })
+        } else if (direction === 'down' && idx < list.length - 1) {
+          set({ blacklist: swapInPlace(list, idx, idx + 1) })
+        }
       },
     }),
     {

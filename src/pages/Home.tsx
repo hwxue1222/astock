@@ -37,6 +37,8 @@ export default function Home() {
   const toggleWatchlist = useStockStore((s) => s.toggleWatchlist)
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
   const toggleBlacklist = useStockStore((s) => s.toggleBlacklist)
+  const moveWatchlistItem = useStockStore((s) => s.moveWatchlistItem)
+  const moveBlacklistItem = useStockStore((s) => s.moveBlacklistItem)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
   const klineKlt = useStockStore((s) => s.klineKlt)
   const klineFqt = useStockStore((s) => s.klineFqt)
@@ -180,6 +182,8 @@ export default function Home() {
               onAdd={(s) => addToWatchlist(s)}
               onRemove={(s) => toggleWatchlist(s)}
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+              onMoveUp={(s) => moveWatchlistItem(s, 'up')}
+              onMoveDown={(s) => moveWatchlistItem(s, 'down')}
             />
             <SymbolsTablePanel
               title="黑名单"
@@ -190,6 +194,8 @@ export default function Home() {
               onAdd={(s) => addToBlacklist(s)}
               onRemove={(s) => toggleBlacklist(s)}
               onOpen={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+              onMoveUp={(s) => moveBlacklistItem(s, 'up')}
+              onMoveDown={(s) => moveBlacklistItem(s, 'down')}
             />
           </div>
         )}
