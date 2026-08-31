@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 
 const PASSWORD = '951106'
-const STORAGE_KEY = 'astock_auth'
+const STORAGE_KEY = 'astock_auth_v2'
 
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false)
