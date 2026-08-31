@@ -1,7 +1,14 @@
 import { useState, useEffect } from 'react'
 
-const PASSWORD = '951106'
-const STORAGE_KEY = 'astock_auth_v2'
+const DEFAULT_PASSWORD = '951106'
+const PWD_STORAGE_KEY = 'astock_pwd'
+const AUTH_STORAGE_KEY = 'astock_auth_v2'
+
+function getStoredPassword(): string {
+  return localStorage.getItem(PWD_STORAGE_KEY) || DEFAULT_PASSWORD
+}
+
+export { getStoredPassword, PWD_STORAGE_KEY, AUTH_STORAGE_KEY, DEFAULT_PASSWORD }
 
 export default function PasswordGate({ children }: { children: React.ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false)
@@ -9,8 +16,10 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
   const [error, setError] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  const password = getStoredPassword()
+
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(AUTH_STORAGE_KEY)
     if (saved === '1') {
       setAuthenticated(true)
     }
@@ -19,8 +28,8 @@ export default function PasswordGate({ children }: { children: React.ReactNode }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (input === PASSWORD) {
-      localStorage.setItem(STORAGE_KEY, '1')
+    if (input === password) {
+      localStorage.setItem(AUTH_STORAGE_KEY, '1')
       setAuthenticated(true)
       setError(false)
     } else {
