@@ -25,6 +25,50 @@ function isStateOwned(controllerType?: string, controller?: string): boolean {
   return keywords.some((k) => text.includes(k))
 }
 
+const PHASE_OPTIONS = [
+  { value: '', label: '—', colorClass: '' },
+  { value: '吸筹中', label: '吸筹中', colorClass: 'border-slate-700 bg-slate-900 text-slate-300' },
+  { value: '出现生命线', label: '出现生命线', colorClass: 'border-sky-700 bg-sky-950 text-sky-200' },
+  { value: '洗盘中', label: '洗盘中', colorClass: 'border-orange-700 bg-orange-950 text-orange-200' },
+  { value: '准备拉升', label: '准备拉升', colorClass: 'border-emerald-700 bg-emerald-950 text-emerald-200' },
+  { value: '出货中', label: '出货中', colorClass: 'border-red-800 bg-red-950 text-red-200' },
+]
+
+function PhaseTag(props: {
+  symbol: string
+  phaseOverrides: Record<string, string>
+  onSetPhase: (symbol: string, phase: string) => void
+  onClearPhase: (symbol: string) => void
+}) {
+  const { symbol, phaseOverrides, onSetPhase, onClearPhase } = props
+  const current = phaseOverrides[symbol.toUpperCase()] || ''
+  const selected = PHASE_OPTIONS.find((o) => o.value === current) ?? PHASE_OPTIONS[0]
+
+  return (
+    <select
+      value={current}
+      onChange={(e) => {
+        const v = e.target.value
+        if (v) {
+          onSetPhase(symbol, v)
+        } else {
+          onClearPhase(symbol)
+        }
+      }}
+      className={cn(
+        'ml-2 cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-semibold outline-none transition-colors',
+        selected.colorClass || 'border-slate-800 bg-slate-900 text-slate-400',
+      )}
+    >
+      {PHASE_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 export default function StockDetail() {
   const navigate = useNavigate()
   const params = useParams()
@@ -50,6 +94,10 @@ export default function StockDetail() {
   const setKline = useStockStore((s) => s.setKline)
   const toggleWatchlist = useStockStore((s) => s.toggleWatchlist)
   const addToBlacklist = useStockStore((s) => s.addToBlacklist)
+
+  const phaseOverrides = useStockStore((s) => s.phaseOverrides)
+  const setPhaseOverride = useStockStore((s) => s.setPhaseOverride)
+  const clearPhaseOverride = useStockStore((s) => s.clearPhaseOverride)
 
   const [universe, setUniverse] = useState<StockItem[]>([])
   const [quoteName, setQuoteName] = useState<string | null>(null)
@@ -292,6 +340,12 @@ export default function StockDetail() {
                 {selectedMeta?.exchange ? (
                   <span className="text-slate-500"> · {selectedMeta.exchange}</span>
                 ) : null}
+                <PhaseTag
+                  symbol={routeSymbol}
+                  phaseOverrides={phaseOverrides}
+                  onSetPhase={setPhaseOverride}
+                  onClearPhase={clearPhaseOverride}
+                />
               </div>
               <div className="mt-1 text-xs text-slate-500">事件时间线 · 信号解释 · 财务比率口径</div>
             </div>
