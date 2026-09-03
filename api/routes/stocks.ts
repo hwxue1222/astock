@@ -633,4 +633,97 @@ router.get('/scan-lifeline', async (req: Request, res: Response): Promise<void> 
   }
 })
 
+router.get('/scan-ma', async (req: Request, res: Response): Promise<void> => {
+  const maxScan = Number(req.query.maxScan ?? 80)
+  const limit = Number.isFinite(maxScan) && maxScan > 0 ? Math.min(maxScan, 200) : 80
+  const daysBack = Number(req.query.days ?? 60)
+
+  try {
+    // 1. 获取全A股列表（含市值）
+    const ds = await getSinaSpotDataset({ ttlSeconds: 6 * 3600 })
+    const allStocks = ds?.items ?? []
+
+    if (!allStocks.length) {
+      res.status(502).json({ success: false, error: 'Universe unavailable' })
+      return
+    }
+
+    // 2. 按市值从小到大排序，取前 limit 只（小市值更容易"蛇吞象"）
+    const candidates = allStocks
+      .filter((s) => {
+        const code = String(s.code ?? '').trim()
+        const m = Number(s.mktcap)
+        return code && Number.isFinite(m) && m > 0
+      })
+      .sort((a, b) => Number(a.mktcap) - Number(b.mktcap))
+      .slice(0, limit)
+      .map((s) => ({
+        code: String(s.code).trim(),
+        name: String(s.name ?? '').trim(),
+        mktcapWan: Number(s.mktcap),
+      }))
+
+    // 3. 并发获取公告（5并发），筛选MNA
+    const results: {
+      code: string
+      name: string
+      mktcapYi: number
+      netAssetsYi: number | null
+      maCount: number
+      latestMaTitle: string
+      latestMaDate: string
+    }[] = []
+
+    const since = new Date()
+    since.setUTCDate(since.getUTCDate() - (Number.isFinite(daysBack) ? daysBack : 60))
+
+    await runWithConcurrency(candidates, 5, async (c) => {
+      try {
+        const events = await getEastmoneyAnnouncements({ code: c.code, pageSize: 15 })
+        const maEvents = events.filter(
+          (e) => e.eventType === 'MNA' && new Date(e.publishedAt) >= since,
+        )
+        if (maEvents.length === 0) return
+
+        // 获取市值（元）和净资产
+        const [quote, fin] = await Promise.all([
+          getEastmoneyQuote({ code: c.code, timeoutMs: 8_000 }).catch(() => null),
+          getEastmoneyFinancialSnapshot({ code: c.code, asOf: 'latest' }).catch(() => null),
+        ])
+
+        const mktcapYuan = quote?.marketCapYuan
+        const netAssetsYuan =
+          fin?.totalAssets && fin?.totalLiabilities
+            ? fin.totalAssets - fin.totalLiabilities
+            : null
+
+        results.push({
+          code: c.code,
+          name: c.name,
+          mktcapYi: mktcapYuan ? mktcapYuan / 100_000_000 : c.mktcapWan * 10_000 / 100_000_000,
+          netAssetsYi: netAssetsYuan ? netAssetsYuan / 100_000_000 : null,
+          maCount: maEvents.length,
+          latestMaTitle: maEvents[0].title,
+          latestMaDate: maEvents[0].publishedAt.slice(0, 10),
+        })
+      } catch {
+        // ignore
+      }
+    })
+
+    res.status(200).json({
+      success: true,
+      scanned: candidates.length,
+      found: results.length,
+      stocks: results,
+    })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'M&A scan failed',
+      detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+    })
+  }
+})
+
 export default router

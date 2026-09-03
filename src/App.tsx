@@ -3,6 +3,7 @@ import Home from "@/pages/Home";
 import StockDetail from "@/pages/StockDetail";
 import WatchlistDashboard from "@/pages/WatchlistDashboard";
 import LifelineMonitor from "@/pages/LifelineMonitor";
+import MaScanner from "@/pages/MaScanner";
 import NavTabs from "@/components/NavTabs";
 import PasswordGate from "@/components/PasswordGate";
 
@@ -17,6 +18,7 @@ export default function App() {
             <Route path="/watchlist" element={<WatchlistDashboard />} />
             <Route path="/lifeline" element={<LifelineMonitor />} />
             <Route path="/lifeline-monitor" element={<LifelineMonitor />} />
+            <Route path="/ma-scan" element={<MaScanner />} />
             <Route path="/stocks/:symbol" element={<StockDetail />} />
           </Routes>
         </div>
