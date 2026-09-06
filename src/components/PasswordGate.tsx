@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 
-const DEFAULT_PASSWORD = '951106'
+const DEFAULT_PASSWORD = '123456'
 const PWD_STORAGE_KEY = 'astock_pwd'
-const AUTH_STORAGE_KEY = 'astock_auth_v2'
+const AUTH_STORAGE_KEY = 'astock_auth_v3'
 
 function getStoredPassword(): string {
   return localStorage.getItem(PWD_STORAGE_KEY) || DEFAULT_PASSWORD
