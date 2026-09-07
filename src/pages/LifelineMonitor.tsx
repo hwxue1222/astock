@@ -266,7 +266,7 @@ export default function LifelineMonitor() {
 
       <div className="mx-auto max-w-[1440px] px-4 py-4">
         <div className="rounded-2xl border border-slate-800 bg-slate-950">
-          <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="text-sm font-semibold text-slate-100">5阶段策略选股</div>
               <div className="text-xs text-slate-400">
@@ -277,34 +277,45 @@ export default function LifelineMonitor() {
                     : `最近5天出现生命线（阳线+放量≥3倍）| 共 ${stocks.length} 只`}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {scanState.status === 'running' ? (
-                <button
-                  type="button"
-                  onClick={handleStop}
-                  className="inline-flex items-center rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500"
-                >
-                  <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  停止扫描
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleScan}
-                  className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
-                >
-                  🚀 扫描全A股
-                </button>
-              )}
-              {stocks.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
-                >
-                  🗑 清空结果
-                </button>
-              )}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {scanState.status === 'running' ? (
+                  <button
+                    type="button"
+                    onClick={handleStop}
+                    className="inline-flex items-center rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-500"
+                  >
+                    <span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    停止扫描
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleScan}
+                    className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500"
+                  >
+                    🚀 扫描全A股
+                  </button>
+                )}
+                {stocks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="inline-flex items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"
+                  >
+                    🗑 清空结果
+                  </button>
+                )}
+              </div>
+              {/* 选股策略说明 */}
+              <div className="mt-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                <div className="text-[11px] font-semibold text-amber-400">📋 选股策略</div>
+                <div className="mt-1 space-y-0.5 text-[11px] text-slate-400">
+                  <div>① 候选池：当天涨幅 <span className="text-slate-200">0.1%~7%</span> 的A股</div>
+                  <div>② 生命线：最近5天出现 <span className="text-slate-200">阳线</span> + 成交量 ≥ 前3天最大值的 <span className="text-slate-200">3倍</span> + 实体涨幅 0.1%~7%</div>
+                  <div>③ 换手检查：生命线前60日平均换手率，异常高换手(&gt;2%天数)需≤3天</div>
+                </div>
+              </div>
             </div>
           </div>
 
