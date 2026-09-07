@@ -53,18 +53,6 @@ export default function NavTabs(): JSX.Element {
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate('/ma-scan')}
-              className={cn(
-                'rounded-lg px-4 py-2 text-sm font-medium transition-colors',
-                location.pathname === '/ma-scan'
-                  ? 'bg-amber-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200',
-              )}
-            >
-              🐍 蛇吞象
-            </button>
-            <button
-              type="button"
               onClick={() => setShowPwdModal(true)}
               className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
             >
