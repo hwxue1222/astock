@@ -14,6 +14,8 @@ import type {
   StockSurveyResponse,
   ThsClassicStatsResponse,
   ThsClassicArticleStocksResponse,
+  StockQuotesResponse,
+  IndustryRotationForecastResponse,
 } from '@/types/stock'
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -99,12 +101,27 @@ export async function getQuote(symbol: string, signal?: AbortSignal): Promise<St
   )
   return data
 }
-
 export async function getSurvey(symbol: string, signal?: AbortSignal): Promise<StockSurveyResponse> {
   const data = await fetchJson<{ success: boolean } & StockSurveyResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/survey`,
     signal,
   )
+  return data
+}
+
+export async function getQuotes(symbols: string[], signal?: AbortSignal): Promise<StockQuotesResponse> {
+  const uniq = Array.from(
+    new Set(
+      symbols
+        .map((s) => String(s ?? '').toUpperCase().match(/(\d{6})/)?.[1] ?? '')
+        .filter((s) => /^\d{6}$/.test(s)),
+    ),
+  )
+  if (!uniq.length) return { items: [] }
+
+  const q = new URLSearchParams()
+  q.set('symbols', uniq.join(','))
+  const data = await fetchJson<{ success: boolean } & StockQuotesResponse>(`/api/stocks/quotes?${q.toString()}`, signal)
   return data
 }
 
@@ -198,6 +215,29 @@ export async function getThsClassicArticleStocks(
   if (typeof input?.limit === 'number') q.set('limit', String(input.limit))
   const data = await fetchJson<{ success: boolean } & ThsClassicArticleStocksResponse>(
     `/api/stocks/ths-classic/stocks?${q.toString()}`,
+    signal,
+  )
+  return data
+}
+
+export async function getIndustryRotationForecast(
+  input?: {
+    months?: number[]
+    years?: number
+    top?: number
+    industries?: number
+    stocksPerIndustry?: number
+  },
+  signal?: AbortSignal,
+): Promise<IndustryRotationForecastResponse> {
+  const q = new URLSearchParams()
+  if (input?.months?.length) q.set('months', input.months.join(','))
+  if (typeof input?.years === 'number') q.set('years', String(input.years))
+  if (typeof input?.top === 'number') q.set('top', String(input.top))
+  if (typeof input?.industries === 'number') q.set('industries', String(input.industries))
+  if (typeof input?.stocksPerIndustry === 'number') q.set('stocksPerIndustry', String(input.stocksPerIndustry))
+  const data = await fetchJson<{ success: boolean } & IndustryRotationForecastResponse>(
+    `/api/stocks/rotation/forecast?${q.toString()}`,
     signal,
   )
   return data

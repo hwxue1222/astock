@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '@/components/TopBar'
 import { formatRatio, formatYiFromYuan, riskLevelClass, riskLevelLabel } from '@/lib/format'
-import { getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
+import { getQuotes, getRatios, getRiskSignals, getUniverse } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { RiskSignalsResponse, StockItem, StockRatiosResponse } from '@/types/stock'
@@ -43,6 +43,7 @@ export default function WatchlistDashboard() {
 
   const [universe, setUniverse] = useState<StockItem[]>([])
   const [rows, setRows] = useState<Row[]>([])
+  const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -106,6 +107,25 @@ export default function WatchlistDashboard() {
 
     return () => ac.abort()
   }, [watchlist, universeBySymbol])
+
+  useEffect(() => {
+    const symbols = watchlist.map((s) => s.toUpperCase()).slice(0, 20)
+    if (!symbols.length) return
+    const ac = new AbortController()
+    getQuotes(symbols, ac.signal)
+      .then((d) => {
+        if (ac.signal.aborted) return
+        const patch: Record<string, string> = {}
+        for (const it of d.items ?? []) {
+          const sym = String(it.symbol ?? '').toUpperCase()
+          const ind = it.industry ? String(it.industry).trim() : ''
+          if (sym && ind) patch[sym] = ind
+        }
+        if (Object.keys(patch).length) setIndustryBySymbol((m) => ({ ...m, ...patch }))
+      })
+      .catch(() => void 0)
+    return () => ac.abort()
+  }, [watchlist])
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -216,7 +236,14 @@ export default function WatchlistDashboard() {
                               {r.symbol}
                               <span className="text-slate-500">{r.exchange ? ` · ${r.exchange}` : ''}</span>
                             </div>
-                            <div className="text-xs text-slate-400">{r.name ?? '—'}</div>
+                            <div className="text-xs text-slate-400">
+                              {r.name ?? '—'}
+                              {industryBySymbol[r.symbol.toUpperCase()] ? (
+                                <span className="ml-2 inline-flex max-w-28 items-center truncate rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 align-middle text-[10px] font-semibold text-slate-200">
+                                  {industryBySymbol[r.symbol.toUpperCase()]}
+                                </span>
+                              ) : null}
+                            </div>
                           </button>
                         </td>
 

@@ -7,6 +7,7 @@ import {
   getSinaSpotDataset,
   pickMarketCapYuanFromDataset,
 } from '../providers/ashareSinaSpot.js'
+import { getAshareUniverseFromEastmoney } from '../providers/ashareUniverseEastmoney.js'
 import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
@@ -18,6 +19,7 @@ import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
 import { getEastmoneyCompanySurvey } from '../providers/eastmoneySurvey.js'
 import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
+import { buildIndustryRotationForecast } from '../domain/industryRotation.js'
 
 const router = Router()
 
@@ -51,6 +53,24 @@ function errorMessage(e: unknown): string {
   }
 }
 
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let i = 0
+  const workers = new Array(Math.max(1, limit)).fill(null).map(async () => {
+    while (i < items.length) {
+      const idx = i
+      i += 1
+      out[idx] = await fn(items[idx], idx)
+    }
+  })
+  await Promise.all(workers)
+  return out
+}
+
 router.get('/universe', async (req: Request, res: Response): Promise<void> => {
   if (isMockMode() && !isRealDataRequired()) {
     res.status(200).json({ success: true, stocks: getMockUniverse(), meta: { source: 'mock' } })
@@ -77,6 +97,20 @@ router.get('/universe', async (req: Request, res: Response): Promise<void> => {
     }
   }
 
+  try {
+    const ds = await getAshareUniverseFromEastmoney({ ttlSeconds: 6 * 3600, timeoutMs: 10_000 })
+    if (ds.items.length) {
+      res.status(200).json({
+        success: true,
+        stocks: ds.items,
+        meta: { source: 'eastmoney_clist' },
+      })
+      return
+    }
+  } catch {
+    void 0
+  }
+
   res.status(502).json({
     success: false,
     error: 'Universe provider unavailable (real data required)',
@@ -97,6 +131,67 @@ router.get('/moneyflow/industry', async (req: Request, res: Response): Promise<v
     res.status(502).json({
       success: false,
       error: 'Industry moneyflow unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/quotes', async (req: Request, res: Response): Promise<void> => {
+  const raw = req.query.symbols
+  const limit = Number(req.query.limit ?? 6)
+
+  const list = (Array.isArray(raw) ? raw.join(',') : String(raw ?? ''))
+    .split(',')
+    .map((s) => normalizeAshareCode(String(s)))
+    .filter((s) => /^\d{6}$/.test(s))
+
+  const uniq = Array.from(new Set(list)).slice(0, 200)
+  if (!uniq.length) {
+    res.status(400).json({ success: false, error: 'Missing symbols' })
+    return
+  }
+
+  const concurrency = Number.isFinite(limit) ? Math.max(1, Math.min(12, limit)) : 6
+
+  const items = await mapLimit(uniq, concurrency, async (code) => {
+    try {
+      const out = await getEastmoneyQuote({ code, timeoutMs: 12_000 })
+      return { symbol: code, ...out }
+    } catch {
+      return { symbol: code }
+    }
+  })
+
+  res.status(200).json({ success: true, items })
+})
+
+router.get('/rotation/forecast', async (req: Request, res: Response): Promise<void> => {
+  const monthsRaw = String(req.query.months ?? '9,10,11,12')
+  const years = Number(req.query.years ?? 10)
+  const top = Number(req.query.top ?? 8)
+  const industries = Number(req.query.industries ?? 18)
+  const stocksPerIndustry = Number(req.query.stocksPerIndustry ?? 3)
+  const ttlSeconds = Number(req.query.ttlSeconds ?? 6 * 3600)
+
+  const months = monthsRaw
+    .split(',')
+    .map((x) => Number(x))
+    .filter((x) => Number.isFinite(x))
+
+  try {
+    const out = await buildIndustryRotationForecast({
+      months,
+      years,
+      top,
+      industries,
+      stocksPerIndustry,
+      ttlSeconds,
+    })
+    res.status(200).json({ success: true, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Industry rotation forecast unavailable (real data required)',
       detail: errorMessage(e),
     })
   }

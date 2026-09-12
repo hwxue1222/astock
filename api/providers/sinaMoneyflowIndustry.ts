@@ -3,6 +3,7 @@ import { fetchJson } from './http.js'
 
 export type SinaIndustryMoneyflowItem = {
   name: string
+  category?: string
   avgPrice: number
   changePct: number
   inflowWan: number
@@ -15,6 +16,7 @@ export type SinaIndustryMoneyflowItem = {
 
 type SinaMoneyflowRow = {
   name?: string
+  category?: string
   avg_price?: string
   avg_changeratio?: string
   inamount?: string
@@ -48,6 +50,7 @@ export async function getSinaIndustryMoneyflow(input?: {
   const items = (Array.isArray(rows) ? rows : [])
     .map((r): SinaIndustryMoneyflowItem | null => {
       const name = typeof r.name === 'string' ? r.name.trim() : ''
+      const category = typeof r.category === 'string' ? r.category.trim() : ''
       const avgPrice = Number(r.avg_price)
       const changePct = Number(r.avg_changeratio) * 100
       const inflowWan = Number(r.inamount) / 10_000
@@ -58,6 +61,7 @@ export async function getSinaIndustryMoneyflow(input?: {
       if (![avgPrice, changePct, inflowWan, outflowWan, netInflowWan, netInflowRate].every(Number.isFinite)) return null
       return {
         name,
+        category: category || undefined,
         avgPrice,
         changePct,
         inflowWan,

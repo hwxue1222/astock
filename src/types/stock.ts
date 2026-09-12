@@ -183,6 +183,38 @@ export interface StockSurveyResponse {
   controller?: string
 }
 
+export interface StockQuotesResponse {
+  items: StockQuoteResponse[]
+}
+
+export type IndustryRotationForecastItem = {
+  name: string
+  category?: string
+  score: number
+  seasonalityAvgReturnPct?: number
+  seasonalityPosRatePct?: number
+  flowNetInflowWan?: number
+  flowNetInflowRatePct?: number
+  leaders: Array<{ symbol: string; name?: string }>
+}
+
+export type IndustryRotationForecastMonth = {
+  month: number
+  top: IndustryRotationForecastItem[]
+}
+
+export type IndustryRotationForecastResponse = {
+  asOfDate: string
+  years: number
+  months: IndustryRotationForecastMonth[]
+  meta: {
+    industryCount: number
+    analyzedIndustries: number
+    stocksPerIndustry: number
+    source: string
+  }
+}
+
 export type IndustryMoneyflowItem = {
   name: string
   avgPrice: number

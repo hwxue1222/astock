@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getQuote, getSimilarStocks, getIndustryMoneyflow } from '@/lib/stockApi'
+import { getIndustryMoneyflow, getQuotes, getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
@@ -92,23 +92,21 @@ export default function SimilarStocksPanel(props: {
     const list = data?.top ?? []
     if (!list.length) return
     const ac = new AbortController()
-    void Promise.all(
-      list.map(async (x) => {
-        const sym = String(x.symbol ?? '').toUpperCase()
-        if (!sym) return
-        if (industryBySymbol[sym]) return
-        try {
-          const q = await getQuote(sym, ac.signal)
-          const ind = q.industry ? String(q.industry).trim() : ''
-          if (!ind) return
-          setIndustryBySymbol((m) => ({ ...m, [sym]: ind }))
-        } catch {
-          void 0
+    const symbols = list.map((x) => String(x.symbol ?? '').toUpperCase())
+    getQuotes(symbols, ac.signal)
+      .then((d) => {
+        if (ac.signal.aborted) return
+        const patch: Record<string, string> = {}
+        for (const it of d.items ?? []) {
+          const sym = String(it.symbol ?? '').toUpperCase()
+          const ind = it.industry ? String(it.industry).trim() : ''
+          if (sym && ind) patch[sym] = ind
         }
-      }),
-    )
+        if (Object.keys(patch).length) setIndustryBySymbol((m) => ({ ...m, ...patch }))
+      })
+      .catch(() => void 0)
     return () => ac.abort()
-  }, [data, industryBySymbol])
+  }, [data])
 
   // 获取行业资金流向（用于行业标签颜色）
   useEffect(() => {

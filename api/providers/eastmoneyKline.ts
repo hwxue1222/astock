@@ -68,6 +68,7 @@ export async function getEastmoneyKline(input: {
   klt: KlineKlt
   fqt: KlineFqt
   limit: number
+  end?: string
   timeoutMs?: number
 }): Promise<{ code: string; name?: string; candles: KlineCandle[]; source: string }> {
   const secid = secidForAshare(input.code)
@@ -77,7 +78,7 @@ export async function getEastmoneyKline(input: {
   q.set('fields2', 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61')
   q.set('klt', input.klt)
   q.set('fqt', input.fqt)
-  q.set('end', '20500101')
+  q.set('end', input.end ? String(input.end).trim() : '20500101')
   q.set('lmt', String(Math.max(20, Math.min(800, input.limit))))
 
   const url = `https://push2his.eastmoney.com/api/qt/stock/kline/get?${q.toString()}`
@@ -117,7 +118,8 @@ export async function getEastmoneyKline(input: {
     'klt = sys.argv[3]',
     'fqt = sys.argv[4]',
     'limit = int(sys.argv[5])',
-    'out = fetch_kline(stock_code, klt=klt, fqt=fqt, limit=limit)',
+      'end = sys.argv[6]',
+      'out = fetch_kline(stock_code, klt=klt, fqt=fqt, limit=limit, end=end)',
     'print(json.dumps(out, ensure_ascii=False))',
   ].join('\n')
 
@@ -126,7 +128,7 @@ export async function getEastmoneyKline(input: {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const out = await execFileAsync(
       'python3',
-      ['-c', code, scriptsDir, input.code, input.klt, input.fqt, String(input.limit)],
+      ['-c', code, scriptsDir, input.code, input.klt, input.fqt, String(input.limit), String(input.end ?? '20500101')],
       { maxBuffer: 10 * 1024 * 1024 },
     )
     lastStdout = String(out.stdout || '').trim()
