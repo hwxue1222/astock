@@ -1,8 +1,47 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getIndustryRotationForecast } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import type { IndustryRotationForecastResponse } from '@/types/stock'
+
+type PersistedRotationForecast = {
+  ts: number
+  params: {
+    months: number[]
+    years: number
+    top: number
+    industries: number
+    stocksPerIndustry: number
+  }
+  data: IndustryRotationForecastResponse
+}
+
+const ROTATION_FORECAST_STORAGE_KEY = 'rotation_forecast:last'
+
+function safeParseJson<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+function getPersistedForecast(): PersistedRotationForecast | null {
+  try {
+    return safeParseJson<PersistedRotationForecast>(window.localStorage.getItem(ROTATION_FORECAST_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+function setPersistedForecast(val: PersistedRotationForecast): void {
+  try {
+    window.localStorage.setItem(ROTATION_FORECAST_STORAGE_KEY, JSON.stringify(val))
+  } catch {
+    void 0
+  }
+}
 
 function monthLabel(m: number): string {
   return `${m}月`
@@ -33,6 +72,28 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<IndustryRotationForecastResponse | null>(null)
 
+  useEffect(() => {
+    const persisted = getPersistedForecast()
+    if (!persisted?.data?.months?.length) return
+
+    const p = persisted.params
+    if (p) {
+      setYears(Number.isFinite(p.years) ? p.years : 10)
+      setIndustries(Number.isFinite(p.industries) ? p.industries : 10)
+      setStocksPerIndustry(Number.isFinite(p.stocksPerIndustry) ? p.stocksPerIndustry : 2)
+      setTop(Number.isFinite(p.top) ? p.top : 8)
+      if (Array.isArray(p.months) && p.months.length) {
+        const next = p.months
+          .map((x) => Math.max(1, Math.min(12, Math.trunc(Number(x)))))
+          .filter((x, i, a) => a.indexOf(x) === i)
+          .sort((a, b) => a - b)
+        if (next.length) setMonths(next)
+      }
+    }
+
+    setData(persisted.data)
+  }, [])
+
   const monthsText = useMemo(() => months.map(monthLabel).join('、'), [months])
 
   return (
@@ -60,7 +121,20 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
               },
               ac.signal,
             )
-              .then((d) => setData(d))
+              .then((d) => {
+                setData(d)
+                setPersistedForecast({
+                  ts: Date.now(),
+                  params: {
+                    months,
+                    years,
+                    top,
+                    industries,
+                    stocksPerIndustry,
+                  },
+                  data: d,
+                })
+              })
               .catch((e: unknown) => {
                 setError(e instanceof Error ? e.message : String(e))
                 setData(null)
