@@ -2,6 +2,7 @@ import type {
   KlineFqt,
   KlineKlt,
   IndustryMoneyflowResponse,
+  IndustryMonthlyFlowSeasonalityResponse,
   MarketBreadthResponse,
   SimilarStocksResponse,
   MajorEvent,
@@ -238,6 +239,29 @@ export async function getIndustryRotationForecast(
   if (typeof input?.stocksPerIndustry === 'number') q.set('stocksPerIndustry', String(input.stocksPerIndustry))
   const data = await fetchJson<{ success: boolean } & IndustryRotationForecastResponse>(
     `/api/stocks/rotation/forecast?${q.toString()}`,
+    signal,
+  )
+  return data
+}
+
+export async function getIndustryMonthlyFlowSeasonality(
+  input?: {
+    years?: number
+    top?: number
+    boardLimit?: number
+    ttlSeconds?: number
+    maxComputeMs?: number
+  },
+  signal?: AbortSignal,
+): Promise<IndustryMonthlyFlowSeasonalityResponse> {
+  const q = new URLSearchParams()
+  if (typeof input?.years === 'number') q.set('years', String(input.years))
+  if (typeof input?.top === 'number') q.set('top', String(input.top))
+  if (typeof input?.boardLimit === 'number') q.set('boardLimit', String(input.boardLimit))
+  if (typeof input?.ttlSeconds === 'number') q.set('ttlSeconds', String(input.ttlSeconds))
+  if (typeof input?.maxComputeMs === 'number') q.set('maxComputeMs', String(input.maxComputeMs))
+  const data = await fetchJson<{ success: boolean } & IndustryMonthlyFlowSeasonalityResponse>(
+    `/api/stocks/moneyflow/industry/seasonality?${q.toString()}`,
     signal,
   )
   return data

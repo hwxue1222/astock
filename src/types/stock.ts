@@ -217,6 +217,48 @@ export type IndustryRotationForecastResponse = {
   }
 }
 
+export type IndustryMonthlyFlowSeasonalityResponse = {
+  years: number
+  baselineYears: number[]
+  baselineTop5ByMonth: Array<{
+    month: number
+    top: Array<{
+      boardCode: string
+      name: string
+      avgNetInflowYi: number
+      positiveYearRatePct: number
+      yearsUsed: number
+    }>
+  }>
+  y2026JanAugTop5ByMonth: Array<{
+    month: number
+    top: Array<{
+      boardCode: string
+      name: string
+      netInflowYi: number
+    }>
+  }>
+  y2026SepDecForecastTop3ByMonth: Array<{
+    month: number
+    top: Array<{
+      boardCode: string
+      name: string
+      score: number
+      seasonalityAvgNetInflowYi?: number
+      y2026YtdNetInflowYi?: number
+      leaders: Array<{ symbol: string; name?: string }>
+    }>
+  }>
+  meta: {
+    boardsTotal: number
+    boardsUsed: number
+    asOfDate: string
+    computeMs: number
+    partial?: boolean
+    source: string
+  }
+}
+
 export type IndustryMoneyflowItem = {
   name: string
   avgPrice: number
