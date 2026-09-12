@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.12.3",
   "scripts": {
     "client:dev": "vite",
     "build": "rm -rf dist && tsc --noEmit && vite build",

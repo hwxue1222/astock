@@ -212,6 +212,8 @@ export type IndustryRotationForecastResponse = {
     analyzedIndustries: number
     stocksPerIndustry: number
     source: string
+    partial?: boolean
+    computeMs?: number
   }
 }
 

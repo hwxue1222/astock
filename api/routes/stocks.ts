@@ -169,9 +169,10 @@ router.get('/rotation/forecast', async (req: Request, res: Response): Promise<vo
   const monthsRaw = String(req.query.months ?? '9,10,11,12')
   const years = Number(req.query.years ?? 10)
   const top = Number(req.query.top ?? 8)
-  const industries = Number(req.query.industries ?? 18)
-  const stocksPerIndustry = Number(req.query.stocksPerIndustry ?? 3)
+  const industries = Number(req.query.industries ?? 10)
+  const stocksPerIndustry = Number(req.query.stocksPerIndustry ?? 2)
   const ttlSeconds = Number(req.query.ttlSeconds ?? 6 * 3600)
+  const maxComputeMs = Number(req.query.maxComputeMs ?? (process.env.VERCEL ? 8000 : 25000))
 
   const months = monthsRaw
     .split(',')
@@ -186,6 +187,7 @@ router.get('/rotation/forecast', async (req: Request, res: Response): Promise<vo
       industries,
       stocksPerIndustry,
       ttlSeconds,
+      maxComputeMs,
     })
     res.status(200).json({ success: true, ...out })
   } catch (e: unknown) {

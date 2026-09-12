@@ -3,6 +3,7 @@
  */
 
 import express, {
+  type NextFunction,
   type Request,
   type Response,
 } from 'express'
@@ -39,13 +40,12 @@ app.use(
   },
 )
 
-/**
- * error handler middleware
- */
-app.use((error: Error, req: Request, res: Response) => {
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  void next
   res.status(500).json({
     success: false,
     error: 'Server internal error',
+    detail: process.env.NODE_ENV === 'development' ? error.message : undefined,
   })
 })
 

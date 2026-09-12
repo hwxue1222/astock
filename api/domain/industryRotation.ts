@@ -31,7 +31,13 @@ export type IndustryRotationForecastResponse = {
     analyzedIndustries: number
     stocksPerIndustry: number
     source: string
+    partial?: boolean
+    computeMs?: number
   }
+}
+
+function isVercelRuntime(): boolean {
+  return Boolean(process.env.VERCEL)
 }
 
 function pad2(n: number): string {
@@ -81,13 +87,14 @@ function pct(n: number | null): number | undefined {
   return n * 100
 }
 
-async function fetchMonthlyReturns(code: string, years: number): Promise<Map<string, number>> {
+async function fetchMonthlyReturns(code: string, years: number, input?: { timeoutMs?: number }): Promise<Map<string, number>> {
   const cachePath = cacheFilePath(`tencent_monthly_returns_${code}_y${years}.json`)
   const cached = await readJsonCache<Record<string, number>>(cachePath, { ttlSeconds: 30 * 24 * 3600 })
   if (cached && Object.keys(cached).length) return new Map(Object.entries(cached))
 
   const limit = Math.max(60, Math.min(260, years * 12 + 24))
-  const t = await getTencentKline({ code, period: 'month', adjust: 'qfq', limit, timeoutMs: 18_000 }).catch(() => null)
+  const timeoutMs = Number.isFinite(input?.timeoutMs) ? Math.max(1000, Number(input?.timeoutMs)) : 18_000
+  const t = await getTencentKline({ code, period: 'month', adjust: 'qfq', limit, timeoutMs }).catch(() => null)
   const candles = t?.candles?.length ? t.candles : []
 
   const closeByMonth = new Map<string, number>()
@@ -98,7 +105,7 @@ async function fetchMonthlyReturns(code: string, years: number): Promise<Map<str
   }
 
   if (!closeByMonth.size) {
-    const out = await getEastmoneyKline({ code, klt: '103', fqt: '1', limit, timeoutMs: 18_000 }).catch(() => null)
+    const out = await getEastmoneyKline({ code, klt: '103', fqt: '1', limit, timeoutMs }).catch(() => null)
     for (const c of out?.candles ?? []) {
       const k = monthKey(c.ts)
       if (!k) continue
@@ -180,6 +187,7 @@ export async function buildIndustryRotationForecast(input?: {
   industries?: number
   stocksPerIndustry?: number
   ttlSeconds?: number
+  maxComputeMs?: number
 }): Promise<IndustryRotationForecastResponse> {
   const months = (input?.months?.length ? input.months : [9, 10, 11, 12])
     .map((x) => Math.max(1, Math.min(12, Math.trunc(x))))
@@ -187,9 +195,16 @@ export async function buildIndustryRotationForecast(input?: {
     .sort((a, b) => a - b)
   const years = Math.max(3, Math.min(15, input?.years ?? 10))
   const top = Math.max(3, Math.min(15, input?.top ?? 8))
-  const industries = Math.max(6, Math.min(30, input?.industries ?? 18))
-  const stocksPerIndustry = Math.max(2, Math.min(8, input?.stocksPerIndustry ?? 3))
+  const industries = Math.max(6, Math.min(30, input?.industries ?? 10))
+  const stocksPerIndustry = Math.max(1, Math.min(8, input?.stocksPerIndustry ?? 2))
   const ttlSeconds = Math.max(60, Math.min(24 * 3600, input?.ttlSeconds ?? 6 * 3600))
+
+  const startedAt = Date.now()
+  const maxComputeMs = Math.max(2000, Math.min(55_000, input?.maxComputeMs ?? (isVercelRuntime() ? 8000 : 25_000)))
+  const deadlineMs = startedAt + maxComputeMs
+  const timeoutMs = isVercelRuntime() ? 6000 : 18_000
+  const perIndustryConcurrency = isVercelRuntime() ? 2 : 4
+  const perIndustryStockConcurrency = isVercelRuntime() ? 2 : 3
 
   const cacheKey = `rotation_forecast_y${years}_m${months.join('-')}_i${industries}_s${stocksPerIndustry}_t${top}.json`
   const cachePath = cacheFilePath(cacheKey)
@@ -198,7 +213,7 @@ export async function buildIndustryRotationForecast(input?: {
 
   const asOfDate = isoDate(new Date())
 
-  const mf = await getSinaIndustryMoneyflow({ fenlei: 0, limit: 100, ttlSeconds: 120, timeoutMs: 12_000 })
+  const mf = await getSinaIndustryMoneyflow({ fenlei: 0, limit: 100, ttlSeconds: 120, timeoutMs })
   const universe = mf
     .filter((x) => x.category)
     .sort((a, b) => b.netInflowRate - a.netInflowRate)
@@ -207,11 +222,26 @@ export async function buildIndustryRotationForecast(input?: {
   const allFlowRates = universe.map((x) => x.netInflowRate)
   const allFlowWan = universe.map((x) => x.netInflowWan)
 
-  const perIndustry = await mapLimit(picked, 4, async (ind) => {
+  let partial = false
+
+  const perIndustry = await mapLimit(picked, perIndustryConcurrency, async (ind) => {
       const node = String(ind.category ?? '').trim()
       const leaders: RotationLeader[] = []
 
       if (ind.leadingSymbol) leaders.push({ symbol: ind.leadingSymbol.replace(/^(sh|sz|bj)/, ''), name: ind.leadingName })
+
+      if (Date.now() > deadlineMs) {
+        partial = true
+        return {
+          name: ind.name,
+          category: ind.category,
+          leaders,
+          flowNetInflowRatePct: ind.netInflowRate,
+          flowNetInflowWan: ind.netInflowWan,
+          flowScore: 0,
+          seasonality: new Map<number, { avgReturn: number | null; posRate: number | null }>(),
+        }
+      }
 
       const rows = await getSinaMarketCenterNode({ node, pn: 1, pz: 200, sort: 'nmc', asc: 0, ttlSeconds: 6 * 3600 })
       const stocks = rows
@@ -230,7 +260,13 @@ export async function buildIndustryRotationForecast(input?: {
       }
 
       const stockList = leaders.filter((x) => /^\d{6}$/.test(x.symbol))
-      const monthlyReturnByStock = await mapLimit(stockList, 3, async (s) => fetchMonthlyReturns(s.symbol, years))
+      const monthlyReturnByStock = await mapLimit(stockList, perIndustryStockConcurrency, async (s) => {
+        if (Date.now() > deadlineMs) {
+          partial = true
+          return new Map<string, number>()
+        }
+        return fetchMonthlyReturns(s.symbol, years, { timeoutMs })
+      })
 
       const flowRatePct = ind.netInflowRate
       const flowWan = ind.netInflowWan
@@ -290,6 +326,8 @@ export async function buildIndustryRotationForecast(input?: {
       analyzedIndustries: picked.length,
       stocksPerIndustry,
       source: 'sina_moneyflow + sina_market_center + eastmoney_kline',
+      partial: partial || Date.now() > deadlineMs,
+      computeMs: Date.now() - startedAt,
     },
   }
 

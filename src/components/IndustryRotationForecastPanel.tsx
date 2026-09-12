@@ -25,8 +25,8 @@ function formatWan(v?: number): string {
 export default function IndustryRotationForecastPanel(): JSX.Element {
   const navigate = useNavigate()
   const [years, setYears] = useState(10)
-  const [industries, setIndustries] = useState(18)
-  const [stocksPerIndustry, setStocksPerIndustry] = useState(3)
+  const [industries, setIndustries] = useState(10)
+  const [stocksPerIndustry, setStocksPerIndustry] = useState(2)
   const [top, setTop] = useState(8)
   const [months, setMonths] = useState<number[]>([9, 10, 11, 12])
   const [loading, setLoading] = useState(false)
@@ -94,7 +94,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
             min={6}
             max={30}
             value={industries}
-            onChange={(e) => setIndustries(Math.max(6, Math.min(30, Number(e.target.value) || 18)))}
+            onChange={(e) => setIndustries(Math.max(6, Math.min(30, Number(e.target.value) || 10)))}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>
@@ -102,10 +102,10 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
           <div className="text-xs text-slate-400">每行业样本股</div>
           <input
             type="number"
-            min={2}
+            min={1}
             max={8}
             value={stocksPerIndustry}
-            onChange={(e) => setStocksPerIndustry(Math.max(2, Math.min(8, Number(e.target.value) || 3)))}
+            onChange={(e) => setStocksPerIndustry(Math.max(1, Math.min(8, Number(e.target.value) || 2)))}
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>
@@ -149,6 +149,8 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
         <div className="mt-3 space-y-4">
           <div className="text-xs text-slate-500">
             更新日期 {data.asOfDate} · 分析行业 {data.meta.analyzedIndustries}/{data.meta.industryCount} · 数据源 {data.meta.source}
+            {data.meta.computeMs ? <span> · 计算 {Math.round(data.meta.computeMs)}ms</span> : null}
+            {data.meta.partial ? <span className="ml-2 text-amber-200">（本次结果为快速版/部分计算）</span> : null}
           </div>
 
           {data.months.map((mm) => (
@@ -197,4 +199,3 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
     </div>
   )
 }
-
