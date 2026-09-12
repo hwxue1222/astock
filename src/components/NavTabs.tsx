@@ -3,12 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import ChangePasswordModal from './ChangePasswordModal'
 
-type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'similar'
+type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar'
 
 const TAB_LIST: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '📊 宏观概览' },
   { key: 'watchlist', label: '⭐ 自选股' },
   { key: 'lifeline', label: '🎯 5阶段策略' },
+  { key: 'rotation', label: '🔥 行业轮动' },
   { key: 'similar', label: '🔍 相似股票' },
 ]
 

@@ -12,7 +12,7 @@ import { getThsClassicStats, getUniverse } from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
-type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'similar'
+type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar'
 
 type LifelineStock = {
   code: string
@@ -55,7 +55,7 @@ export default function Home() {
   // 监听路由 state，自动切换到指定标签
   useEffect(() => {
     const tab = (location.state as any)?.activeTab
-    if (tab && ['overview', 'watchlist', 'lifeline', 'similar'].includes(tab)) {
+    if (tab && ['overview', 'watchlist', 'lifeline', 'rotation', 'similar'].includes(tab)) {
       setActiveTab(tab)
       window.history.replaceState({}, document.title)
     }
@@ -168,6 +168,12 @@ export default function Home() {
             />
             <MarketBreadthPanel />
             <IndustryMoneyflowPanel />
+            <IndustryRotationForecastPanel />
+          </div>
+        )}
+
+        {activeTab === 'rotation' && (
+          <div className="space-y-4">
             <IndustryRotationForecastPanel />
           </div>
         )}
