@@ -8,7 +8,11 @@ import {
   pickMarketCapYuanFromDataset,
 } from '../providers/ashareSinaSpot.js'
 import { getAshareUniverseFromEastmoney } from '../providers/ashareUniverseEastmoney.js'
-import { getEastmoneyFinancialSnapshot } from '../providers/eastmoneyDatacenter.js'
+import {
+  getEastmoneyFinancialSnapshot,
+  getEastmoneyOperatingCashflow,
+  getEastmoneyRegionalComposition,
+} from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
@@ -434,8 +438,10 @@ router.get(
     {
       try {
         const code = normalizeAshareCode(symbol)
-        const [fin, ds] = await Promise.all([
+        const [fin, cashflow, composition, ds] = await Promise.all([
           getEastmoneyFinancialSnapshot({ code, asOf }),
+          getEastmoneyOperatingCashflow({ code, asOf }).catch(() => null),
+          getEastmoneyRegionalComposition({ code, asOf }).catch(() => null),
           getSinaSpotDataset({ ttlSeconds: 6 * 3600 }),
         ])
 
@@ -457,6 +463,11 @@ router.get(
             revenue: fin.revenue,
             cash: fin.cash,
             marketCap,
+            operatingCashflow: cashflow?.operatingCashflow,
+            domesticRevenue: composition?.domesticRevenue,
+            overseasRevenue: composition?.overseasRevenue,
+            domesticRatio: composition?.domesticRatio,
+            overseasRatio: composition?.overseasRatio,
           },
         })
 

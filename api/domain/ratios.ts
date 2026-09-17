@@ -16,6 +16,11 @@ export function buildRatiosResponse(input: {
     revenue?: number
     cash?: number
     marketCap?: number
+    operatingCashflow?: number
+    domesticRevenue?: number
+    overseasRevenue?: number
+    domesticRatio?: number
+    overseasRatio?: number
   }
 }): StockRatiosResponse {
   const { symbol, asOf, asOfDate, fields } = input

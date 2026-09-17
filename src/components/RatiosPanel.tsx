@@ -35,6 +35,11 @@ export default function RatiosPanel(props: {
     return '数值：—'
   }
 
+  const f = props.data?.fields
+  const hasCashflow = typeof f?.operatingCashflow === 'number'
+  const hasComposition =
+    typeof f?.domesticRevenue === 'number' || typeof f?.overseasRevenue === 'number'
+
   return (
     <div className="flex h-[calc(100vh-64px-16px)] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-950">
       <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
@@ -136,12 +141,96 @@ export default function RatiosPanel(props: {
                         <div className="rounded-lg bg-slate-900/60 p-2">
                           营收：{formatYiFromYuan(props.data?.fields.revenue)}
                         </div>
+                        <div className="rounded-lg bg-slate-900/60 p-2">
+                          经营现金流：{formatYiFromYuan(props.data?.fields.operatingCashflow)}
+                        </div>
                       </div>
                     </div>
                   ) : null}
                 </div>
               )
             })}
+
+            {/* 经营现金流 & 国内外业务 */}
+            {hasCashflow || hasComposition ? (
+              <div className="rounded-xl border border-slate-800 bg-slate-950">
+                <div className="border-b border-slate-800 px-4 py-2.5">
+                  <span className="text-xs font-semibold text-slate-200">
+                    💰 经营现金流与国内外业务
+                  </span>
+                </div>
+                <div className="space-y-2 px-4 py-3 text-xs">
+                  {hasCashflow ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">经营现金流净额</span>
+                      <span
+                        className={cn(
+                          'font-semibold tabular-nums',
+                          (f?.operatingCashflow ?? 0) >= 0
+                            ? 'text-emerald-400'
+                            : 'text-red-400',
+                        )}
+                      >
+                        {formatYiFromYuan(f?.operatingCashflow)}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {hasComposition ? (
+                    <>
+                      <div className="flex items-center justify-between border-t border-slate-800/60 pt-2">
+                        <span className="text-slate-400">🌏 国内业务</span>
+                        <span className="text-slate-200 tabular-nums">
+                          {formatYiFromYuan(f?.domesticRevenue)}
+                          {typeof f?.domesticRatio === 'number' ? (
+                            <span className="ml-1.5 text-slate-500">
+                              ({(f.domesticRatio * 100).toFixed(1)}%)
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400">✈️ 国外业务</span>
+                        <span className="text-slate-200 tabular-nums">
+                          {formatYiFromYuan(f?.overseasRevenue)}
+                          {typeof f?.overseasRatio === 'number' ? (
+                            <span className="ml-1.5 text-slate-500">
+                              ({(f.overseasRatio * 100).toFixed(1)}%)
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                      {/* 国内外占比条形图 */}
+                      {typeof f?.domesticRatio === 'number' &&
+                      typeof f?.overseasRatio === 'number' ? (
+                        <div className="pt-1">
+                          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                            <div
+                              className="bg-sky-500"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, f.domesticRatio * 100))}%`,
+                              }}
+                            />
+                            <div
+                              className="bg-amber-500"
+                              style={{
+                                width: `${Math.min(100, Math.max(0, f.overseasRatio * 100))}%`,
+                              }}
+                            />
+                          </div>
+                          <div className="mt-1 flex justify-between text-[10px] text-slate-500">
+                            <span>■ 国内 {(f.domesticRatio * 100).toFixed(1)}%</span>
+                            <span>国外 {(f.overseasRatio * 100).toFixed(1)}% ■</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="text-slate-500">暂无国内外业务拆分数据</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="text-sm text-slate-400">请选择标的</div>
