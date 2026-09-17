@@ -15,8 +15,6 @@ import {
 } from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
-import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
-import { getTencentKline } from '../providers/tencentKline.js'
 import { findSimilarStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
@@ -25,6 +23,8 @@ import { getEastmoneyCompanySurvey } from '../providers/eastmoneySurvey.js'
 import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
 import { buildIndustryRotationForecast } from '../domain/industryRotation.js'
 import { buildIndustryMonthlyFlowSeasonality } from '../domain/industryFlowSeasonality.js'
+import { fetchKlineRobust, fetchFinancialRobust, mergeQuoteWithSina, galaxyBridgeUrl } from '../providers/multiSource.js'
+import { mxStockDiagnosis, mxScreenStocks, isMxAvailable } from '../providers/dongcaiMx.js'
 
 const router = Router()
 
@@ -167,7 +167,10 @@ router.get('/quotes', async (req: Request, res: Response): Promise<void> => {
     }
   })
 
-  res.status(200).json({ success: true, items })
+  // 新浪批量行情合并：补充涨跌幅/PB 交叉验证（东财单源失败时兜底）
+  const merged = await mergeQuoteWithSina(items)
+
+  res.status(200).json({ success: true, items: merged })
 })
 
 router.get('/rotation/forecast', async (req: Request, res: Response): Promise<void> => {
@@ -551,62 +554,17 @@ router.get(
     const fqt = (fqtRaw === '0' || fqtRaw === '2' ? fqtRaw : '1') as '0' | '1' | '2'
 
     try {
-      const period = klt === '103' ? 'month' : klt === '102' ? 'week' : 'day'
-      const adjust = fqt === '1' ? 'qfq' : 'none'
-
       const lmt = Number.isFinite(limit) ? limit : 200
-      const [tencent, east] = await Promise.all([
-        getTencentKline({ code, period, adjust, limit: lmt }),
-        getEastmoneyKline({ code, klt, fqt, limit: lmt }).catch(() => null),
-      ])
-
-      if (!tencent.candles.length) {
-        if (east?.candles?.length) {
-          res.status(200).json({
-            success: true,
-            symbol: code,
-            name: east.name,
-            klt,
-            fqt,
-            candles: east.candles,
-            meta: { source: east.source },
-          })
-          return
-        }
-        res.status(200).json({
-          success: true,
-          symbol: code,
-          name: undefined,
-          klt,
-          fqt,
-          candles: [],
-          meta: { source: tencent.source },
-        })
-        return
-      }
-
-      const emByTs = new Map<string, { amount?: number; turnover?: number }>()
-      for (const c of east?.candles ?? []) {
-        emByTs.set(c.ts, { amount: c.amount, turnover: c.turnover })
-      }
-
-      const candles = tencent.candles.map((c) => {
-        const extra = emByTs.get(c.ts)
-        return {
-          ...c,
-          amount: extra?.amount,
-          turnover: extra?.turnover,
-        }
-      })
+      const robust = await fetchKlineRobust({ code, klt, fqt, limit: lmt })
 
       res.status(200).json({
         success: true,
         symbol: code,
-        name: undefined,
+        name: robust.name,
         klt,
         fqt,
-        candles,
-        meta: { source: east?.source ? `${tencent.source}+${east.source}` : tencent.source },
+        candles: robust.candles,
+        meta: { source: robust.sources.join('+') || 'none' },
       })
     } catch (e: unknown) {
       res.status(502).json({
@@ -757,6 +715,11 @@ router.get('/scan-lifeline', async (req: Request, res: Response): Promise<void> 
       scanned: candidates.length,
       total_universe: allStocks.length,
       candidates,
+      meta: {
+        sources: 'sina_spot+kline(腾讯/东财多源)',
+        galaxyBridge: galaxyBridgeUrl() ? 'connected' : 'offline(本地启动 scripts/galaxy_bridge.py 可增强)',
+        mxAvailable: isMxAvailable(),
+      },
     })
   } catch (e: unknown) {
     res.status(502).json({
@@ -855,6 +818,66 @@ router.get('/scan-ma', async (req: Request, res: Response): Promise<void> => {
     res.status(502).json({
       success: false,
       error: 'M&A scan failed',
+      detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+    })
+  }
+})
+
+/**
+ * 妙想个股综合诊断：基本面+资金面+风险面 Markdown 报告
+ * 与本地5阶段分析互补（妙想覆盖财务质量和风险，5阶段管技术择时）
+ */
+router.get('/mx/diagnosis', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.query.symbol ?? '').trim()
+  if (!symbol) {
+    res.status(400).json({ success: false, error: 'Missing symbol' })
+    return
+  }
+  if (!isMxAvailable()) {
+    res.status(503).json({ success: false, error: '妙想数据源不可用（缺少 KIMI_API_KEY）' })
+    return
+  }
+  try {
+    const code = normalizeAshareCode(symbol)
+    const out = await mxStockDiagnosis(`${code} 综合诊断`)
+    if (!out) {
+      res.status(502).json({ success: false, error: '妙想诊断失败' })
+      return
+    }
+    res.status(200).json({ success: true, symbol: code, report: out.preview, source: 'dongcai_mx' })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: '妙想诊断异常',
+      detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+    })
+  }
+})
+
+/**
+ * 妙想智能选股：自然语言条件筛选（与5阶段技术筛选互补，做基本面预筛）
+ */
+router.get('/mx/screen', async (req: Request, res: Response): Promise<void> => {
+  const query = String(req.query.q ?? '').trim()
+  if (!query) {
+    res.status(400).json({ success: false, error: 'Missing q' })
+    return
+  }
+  if (!isMxAvailable()) {
+    res.status(503).json({ success: false, error: '妙想数据源不可用（缺少 KIMI_API_KEY）' })
+    return
+  }
+  try {
+    const out = await mxScreenStocks(query)
+    if (!out) {
+      res.status(502).json({ success: false, error: '妙想选股失败' })
+      return
+    }
+    res.status(200).json({ success: true, query, result: out.preview, source: 'dongcai_mx' })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: '妙想选股异常',
       detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
     })
   }
