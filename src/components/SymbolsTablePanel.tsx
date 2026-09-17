@@ -282,7 +282,7 @@ export default function SymbolsTablePanel(props: {
       <div className="p-2">
         {filtered.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-800">
-            <div className="grid grid-cols-12 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-400">
+            <div className="grid grid-cols-14 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-400">
               <div className="col-span-1 whitespace-nowrap">阶段</div>
               <div className="col-span-2 whitespace-nowrap">代码</div>
               <div className="col-span-2 whitespace-nowrap">名称</div>
@@ -291,6 +291,8 @@ export default function SymbolsTablePanel(props: {
               <div className="col-span-2 whitespace-nowrap text-right">走势</div>
               <div className="col-span-1 whitespace-nowrap text-right">涨跌</div>
               <div className="col-span-1 whitespace-nowrap text-right">成交额</div>
+              <div className="col-span-1 whitespace-nowrap text-right">经营现金流</div>
+              <div className="col-span-1 whitespace-nowrap text-right">海外占比</div>
               <div className="col-span-1 whitespace-nowrap text-right">操作</div>
             </div>
             <div className="divide-y divide-slate-800">
@@ -305,7 +307,7 @@ export default function SymbolsTablePanel(props: {
                 const phase = phaseOverrides[symbol] ?? ''
                 const isState = stateOwnedBySymbol[symbol] ?? false
                 return (
-                  <div key={symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-1.5 text-xs">
+                  <div key={symbol} className="grid grid-cols-14 items-center gap-2 px-3 py-1.5 text-xs">
                     <div className="col-span-1">
                       <select
                         value={phaseOverrides[symbol] ?? ''}
@@ -362,6 +364,42 @@ export default function SymbolsTablePanel(props: {
 
                     <div className={cn('col-span-1 whitespace-nowrap text-right', pctCls)}>{formatPct(pct)}</div>
                     <div className="col-span-1 whitespace-nowrap text-right text-slate-300">{formatYi(stats.amount)}</div>
+
+                    {/* 经营现金流 */}
+                    <div
+                      className={cn(
+                        'col-span-1 whitespace-nowrap text-right tabular-nums',
+                        ratiosBySymbol[symbol]?.fields?.operatingCashflow === undefined
+                          ? 'text-slate-600'
+                          : (ratiosBySymbol[symbol]?.fields?.operatingCashflow ?? 0) >= 0
+                            ? 'text-emerald-400'
+                            : 'text-red-400',
+                      )}
+                    >
+                      {formatYi(ratiosBySymbol[symbol]?.fields?.operatingCashflow)}
+                    </div>
+
+                    {/* 海外占比 */}
+                    <div
+                      className="col-span-1 whitespace-nowrap text-right text-slate-300 tabular-nums"
+                      title={
+                        ratiosBySymbol[symbol]?.fields?.overseasRatio !== undefined
+                          ? `国内 ${(100 - (ratiosBySymbol[symbol]?.fields?.overseasRatio ?? 0) * 100).toFixed(1)}% / 国外 ${((ratiosBySymbol[symbol]?.fields?.overseasRatio ?? 0) * 100).toFixed(1)}%`
+                          : undefined
+                      }
+                    >
+                      {ratiosBySymbol[symbol]?.fields?.overseasRatio !== undefined ? (
+                        (ratiosBySymbol[symbol]?.fields?.overseasRatio ?? 0) > 0.005 ? (
+                          <span className="text-amber-400">
+                            {((ratiosBySymbol[symbol]?.fields?.overseasRatio ?? 0) * 100).toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">纯内需</span>
+                        )
+                      ) : (
+                        '—'
+                      )}
+                    </div>
 
                     <div className="col-span-1 flex justify-end gap-0.5">
                       {props.onMoveUp ? (
