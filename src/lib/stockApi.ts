@@ -17,6 +17,7 @@ import type {
   ThsClassicArticleStocksResponse,
   StockQuotesResponse,
   IndustryRotationForecastResponse,
+  BoardFlowRollingResponse,
 } from '@/types/stock'
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -228,6 +229,8 @@ export async function getIndustryRotationForecast(
     top?: number
     industries?: number
     stocksPerIndustry?: number
+    boardType?: 'industry' | 'concept'
+    fenlei?: 0 | 1
   },
   signal?: AbortSignal,
 ): Promise<IndustryRotationForecastResponse> {
@@ -237,6 +240,8 @@ export async function getIndustryRotationForecast(
   if (typeof input?.top === 'number') q.set('top', String(input.top))
   if (typeof input?.industries === 'number') q.set('industries', String(input.industries))
   if (typeof input?.stocksPerIndustry === 'number') q.set('stocksPerIndustry', String(input.stocksPerIndustry))
+  if (input?.boardType) q.set('boardType', input.boardType)
+  if (typeof input?.fenlei === 'number') q.set('fenlei', String(input.fenlei))
   const data = await fetchJson<{ success: boolean } & IndustryRotationForecastResponse>(
     `/api/stocks/rotation/forecast?${q.toString()}`,
     signal,
@@ -262,6 +267,31 @@ export async function getIndustryMonthlyFlowSeasonality(
   if (typeof input?.maxComputeMs === 'number') q.set('maxComputeMs', String(input.maxComputeMs))
   const data = await fetchJson<{ success: boolean } & IndustryMonthlyFlowSeasonalityResponse>(
     `/api/stocks/moneyflow/industry/seasonality?${q.toString()}`,
+    signal,
+  )
+  return data
+}
+
+export async function getBoardFlowRolling(
+  input?: {
+    boardType?: 'concept' | 'theme'
+    days?: number
+    top?: number
+    boardLimit?: number
+    ttlSeconds?: number
+    maxComputeMs?: number
+  },
+  signal?: AbortSignal,
+): Promise<BoardFlowRollingResponse> {
+  const q = new URLSearchParams()
+  if (input?.boardType) q.set('boardType', input.boardType)
+  if (typeof input?.days === 'number') q.set('days', String(input.days))
+  if (typeof input?.top === 'number') q.set('top', String(input.top))
+  if (typeof input?.boardLimit === 'number') q.set('boardLimit', String(input.boardLimit))
+  if (typeof input?.ttlSeconds === 'number') q.set('ttlSeconds', String(input.ttlSeconds))
+  if (typeof input?.maxComputeMs === 'number') q.set('maxComputeMs', String(input.maxComputeMs))
+  const data = await fetchJson<{ success: boolean } & BoardFlowRollingResponse>(
+    `/api/stocks/moneyflow/boards/rolling?${q.toString()}`,
     signal,
   )
   return data

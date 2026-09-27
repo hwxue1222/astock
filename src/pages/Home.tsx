@@ -5,6 +5,7 @@ import ThsClassicStatsPanel from '@/components/ThsClassicStatsPanel'
 import IndustryMoneyflowPanel from '@/components/IndustryMoneyflowPanel'
 import MarketBreadthPanel from '@/components/MarketBreadthPanel'
 import IndustryRotationForecastPanel from '@/components/IndustryRotationForecastPanel'
+import BoardRollingMoneyflowPanel from '@/components/BoardRollingMoneyflowPanel'
 import SymbolsTablePanel from '@/components/SymbolsTablePanel'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
@@ -13,6 +14,14 @@ import { useStockStore } from '@/stores/stockStore'
 import type { StockItem, ThsClassicStatsResponse } from '@/types/stock'
 
 type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar'
+
+const HOME_TAB_STORAGE_KEY = 'home:activeTab'
+
+function normalizeTabKey(v: unknown): TabKey | null {
+  const s = typeof v === 'string' ? v : ''
+  if (s === 'overview' || s === 'watchlist' || s === 'lifeline' || s === 'rotation' || s === 'similar') return s
+  return null
+}
 
 type LifelineStock = {
   code: string
@@ -52,14 +61,35 @@ export default function Home() {
   const [thsLoading, setThsLoading] = useState(false)
   const [thsError, setThsError] = useState<string | null>(null)
 
-  // 监听路由 state，自动切换到指定标签
   useEffect(() => {
-    const tab = (location.state as any)?.activeTab
-    if (tab && ['overview', 'watchlist', 'lifeline', 'rotation', 'similar'].includes(tab)) {
-      setActiveTab(tab)
+    const tabFromState = normalizeTabKey((location.state as any)?.activeTab)
+    if (tabFromState) {
+      setActiveTab(tabFromState)
+      try {
+        window.localStorage.setItem(HOME_TAB_STORAGE_KEY, tabFromState)
+      } catch {
+        void 0
+      }
       window.history.replaceState({}, document.title)
+      return
     }
+
+    let persisted: TabKey | null = null
+    try {
+      persisted = normalizeTabKey(window.localStorage.getItem(HOME_TAB_STORAGE_KEY))
+    } catch {
+      persisted = null
+    }
+    if (persisted) setActiveTab(persisted)
   }, [location.state])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HOME_TAB_STORAGE_KEY, activeTab)
+    } catch {
+      void 0
+    }
+  }, [activeTab])
 
   // 加载生命线数据
   useEffect(() => {
@@ -168,6 +198,7 @@ export default function Home() {
             />
             <MarketBreadthPanel />
             <IndustryMoneyflowPanel />
+            <BoardRollingMoneyflowPanel />
             <IndustryRotationForecastPanel />
           </div>
         )}

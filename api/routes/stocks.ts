@@ -23,6 +23,7 @@ import { getEastmoneyCompanySurvey } from '../providers/eastmoneySurvey.js'
 import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
 import { buildIndustryRotationForecast } from '../domain/industryRotation.js'
 import { buildIndustryMonthlyFlowSeasonality } from '../domain/industryFlowSeasonality.js'
+import { buildBoardFlowRolling } from '../domain/boardFlowRolling.js'
 import { fetchKlineRobust, fetchFinancialRobust, mergeQuoteWithSina, galaxyBridgeUrl } from '../providers/multiSource.js'
 import { mxStockDiagnosis, mxScreenStocks, isMxAvailable } from '../providers/dongcaiMx.js'
 
@@ -179,6 +180,11 @@ router.get('/rotation/forecast', async (req: Request, res: Response): Promise<vo
   const top = Number(req.query.top ?? 8)
   const industries = Number(req.query.industries ?? 10)
   const stocksPerIndustry = Number(req.query.stocksPerIndustry ?? 2)
+  const boardType = String(req.query.boardType ?? '').trim().toLowerCase()
+  const fenleiQuery = Number(req.query.fenlei)
+  let fenlei: 0 | 1 = fenleiQuery === 1 ? 1 : 0
+  if (boardType === 'concept') fenlei = 1
+  if (boardType === 'industry') fenlei = 0
   const ttlSeconds = Number(req.query.ttlSeconds ?? 6 * 3600)
   const maxComputeMs = Number(req.query.maxComputeMs ?? (process.env.VERCEL ? 8000 : 25000))
 
@@ -194,6 +200,7 @@ router.get('/rotation/forecast', async (req: Request, res: Response): Promise<vo
       top,
       industries,
       stocksPerIndustry,
+      fenlei,
       ttlSeconds,
       maxComputeMs,
     })
@@ -227,6 +234,33 @@ router.get('/moneyflow/industry/seasonality', async (req: Request, res: Response
     res.status(502).json({
       success: false,
       error: 'Industry monthly flow seasonality unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/moneyflow/boards/rolling', async (req: Request, res: Response): Promise<void> => {
+  const boardType = String(req.query.boardType ?? 'concept').trim().toLowerCase() === 'theme' ? 'theme' : 'concept'
+  const days = Number(req.query.days ?? 14)
+  const top = Number(req.query.top ?? 20)
+  const boardLimit = Number(req.query.boardLimit ?? 200)
+  const ttlSeconds = Number(req.query.ttlSeconds ?? 20 * 60)
+  const maxComputeMs = Number(req.query.maxComputeMs ?? (process.env.VERCEL ? 8000 : 25000))
+
+  try {
+    const out = await buildBoardFlowRolling({
+      boardType,
+      days,
+      top,
+      boardLimit,
+      ttlSeconds,
+      maxComputeMs,
+    })
+    res.status(200).json({ success: true, ...out })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: 'Board rolling moneyflow unavailable (real data required)',
       detail: errorMessage(e),
     })
   }

@@ -216,6 +216,8 @@ export type IndustryRotationForecastResponse = {
     industryCount: number
     analyzedIndustries: number
     stocksPerIndustry: number
+    fenlei?: 0 | 1
+    boardType?: 'industry' | 'concept'
     source: string
     partial?: boolean
     computeMs?: number
@@ -261,6 +263,31 @@ export type IndustryMonthlyFlowSeasonalityResponse = {
     computeMs: number
     partial?: boolean
     source: string
+  }
+}
+
+export type BoardFlowRollingItem = {
+  boardCode: string
+  name: string
+  startDate: string
+  endDate: string
+  daysUsed: number
+  sumMainNetInflowYi: number
+  lastMainNetInflowYi: number
+}
+
+export type BoardFlowRollingResponse = {
+  boardType: 'concept' | 'theme'
+  days: number
+  top: number
+  items: BoardFlowRollingItem[]
+  meta: {
+    boardsTotal: number
+    boardsUsed: number
+    computeMs: number
+    partial?: boolean
+    source: string
+    fallback?: string
   }
 }
 

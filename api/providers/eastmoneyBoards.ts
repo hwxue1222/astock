@@ -27,6 +27,22 @@ function normalizeBk(code: string): string {
 export async function getEastmoneyIndustryBoards(input?: {
   timeoutMs?: number
 }): Promise<EastmoneyBoard[]> {
+  return getEastmoneyBoardsByFs({ fs: 'm:90+t:1', timeoutMs: input?.timeoutMs })
+}
+
+export async function getEastmoneyConceptBoards(input?: {
+  timeoutMs?: number
+}): Promise<EastmoneyBoard[]> {
+  return getEastmoneyBoardsByFs({ fs: 'm:90+t:3', timeoutMs: input?.timeoutMs })
+}
+
+export async function getEastmoneyThemeBoards(input?: {
+  timeoutMs?: number
+}): Promise<EastmoneyBoard[]> {
+  return getEastmoneyBoardsByFs({ fs: 'm:90+t:4', timeoutMs: input?.timeoutMs })
+}
+
+async function getEastmoneyBoardsByFs(input: { fs: string; timeoutMs?: number }): Promise<EastmoneyBoard[]> {
   const q = new URLSearchParams()
   q.set('pn', '1')
   q.set('pz', '500')
@@ -35,13 +51,13 @@ export async function getEastmoneyIndustryBoards(input?: {
   q.set('fltt', '2')
   q.set('invt', '2')
   q.set('fid', 'f62')
-  q.set('fs', 'm:90+t:1')
+  q.set('fs', input.fs)
   q.set('fields', 'f12,f14')
   q.set('ut', 'bd1d9ddb04089700cf9c27f6f7426281')
   const url = `https://push2.eastmoney.com/api/qt/clist/get?${q.toString()}`
 
   const payload = await fetchJson<EastmoneyClistResponse>(url, {
-    timeoutMs: input?.timeoutMs ?? 12_000,
+    timeoutMs: input.timeoutMs ?? 12_000,
     headers: { referer: 'https://quote.eastmoney.com' },
   })
 
@@ -149,4 +165,3 @@ export async function getEastmoneyBoardFlowDayKline(input: {
   rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
   return { boardCode: board, boardName: payload.data?.name, rows }
 }
-

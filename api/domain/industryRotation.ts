@@ -30,6 +30,8 @@ export type IndustryRotationForecastResponse = {
     industryCount: number
     analyzedIndustries: number
     stocksPerIndustry: number
+    fenlei?: 0 | 1
+    boardType?: 'industry' | 'concept'
     source: string
     partial?: boolean
     computeMs?: number
@@ -186,6 +188,7 @@ export async function buildIndustryRotationForecast(input?: {
   top?: number
   industries?: number
   stocksPerIndustry?: number
+  fenlei?: 0 | 1
   ttlSeconds?: number
   maxComputeMs?: number
 }): Promise<IndustryRotationForecastResponse> {
@@ -197,6 +200,7 @@ export async function buildIndustryRotationForecast(input?: {
   const top = Math.max(3, Math.min(15, input?.top ?? 8))
   const industries = Math.max(6, Math.min(30, input?.industries ?? 10))
   const stocksPerIndustry = Math.max(1, Math.min(8, input?.stocksPerIndustry ?? 2))
+  const fenlei: 0 | 1 = input?.fenlei === 1 ? 1 : 0
   const ttlSeconds = Math.max(60, Math.min(24 * 3600, input?.ttlSeconds ?? 6 * 3600))
 
   const startedAt = Date.now()
@@ -206,14 +210,14 @@ export async function buildIndustryRotationForecast(input?: {
   const perIndustryConcurrency = isVercelRuntime() ? 2 : 4
   const perIndustryStockConcurrency = isVercelRuntime() ? 2 : 3
 
-  const cacheKey = `rotation_forecast_y${years}_m${months.join('-')}_i${industries}_s${stocksPerIndustry}_t${top}.json`
+  const cacheKey = `rotation_forecast_y${years}_m${months.join('-')}_i${industries}_s${stocksPerIndustry}_t${top}_f${fenlei}.json`
   const cachePath = cacheFilePath(cacheKey)
   const cached = await readJsonCache<IndustryRotationForecastResponse>(cachePath, { ttlSeconds })
   if (cached?.months?.length) return cached
 
   const asOfDate = isoDate(new Date())
 
-  const mf = await getSinaIndustryMoneyflow({ fenlei: 0, limit: 100, ttlSeconds: 120, timeoutMs })
+  const mf = await getSinaIndustryMoneyflow({ fenlei, limit: 100, ttlSeconds: 120, timeoutMs })
   const universe = mf
     .filter((x) => x.category)
     .sort((a, b) => b.netInflowRate - a.netInflowRate)
@@ -325,6 +329,8 @@ export async function buildIndustryRotationForecast(input?: {
       industryCount: universe.length,
       analyzedIndustries: picked.length,
       stocksPerIndustry,
+      fenlei,
+      boardType: fenlei === 1 ? 'concept' : 'industry',
       source: 'sina_moneyflow + sina_market_center + eastmoney_kline',
       partial: partial || Date.now() > deadlineMs,
       computeMs: Date.now() - startedAt,

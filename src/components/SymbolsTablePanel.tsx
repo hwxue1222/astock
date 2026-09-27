@@ -282,7 +282,7 @@ export default function SymbolsTablePanel(props: {
       <div className="p-2">
         {filtered.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-800">
-            <div className="grid grid-cols-14 bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-400">
+            <div className="grid grid-cols-[repeat(14,minmax(0,1fr))] bg-slate-900/70 px-3 py-1.5 text-[11px] text-slate-400">
               <div className="col-span-1 whitespace-nowrap">阶段</div>
               <div className="col-span-2 whitespace-nowrap">代码</div>
               <div className="col-span-2 whitespace-nowrap">名称</div>
@@ -307,7 +307,7 @@ export default function SymbolsTablePanel(props: {
                 const phase = phaseOverrides[symbol] ?? ''
                 const isState = stateOwnedBySymbol[symbol] ?? false
                 return (
-                  <div key={symbol} className="grid grid-cols-14 items-center gap-2 px-3 py-1.5 text-xs">
+                  <div key={symbol} className="grid grid-cols-[repeat(14,minmax(0,1fr))] items-center gap-2 px-3 py-1.5 text-xs">
                     <div className="col-span-1">
                       <select
                         value={phaseOverrides[symbol] ?? ''}

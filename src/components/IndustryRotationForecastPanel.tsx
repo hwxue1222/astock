@@ -12,6 +12,7 @@ type PersistedRotationForecast = {
     top: number
     industries: number
     stocksPerIndustry: number
+    boardType?: 'industry' | 'concept'
   }
   data: IndustryRotationForecastResponse
 }
@@ -63,6 +64,7 @@ function formatWan(v?: number): string {
 
 export default function IndustryRotationForecastPanel(): JSX.Element {
   const navigate = useNavigate()
+  const [boardType, setBoardType] = useState<'industry' | 'concept'>('industry')
   const [years, setYears] = useState(10)
   const [industries, setIndustries] = useState(10)
   const [stocksPerIndustry, setStocksPerIndustry] = useState(2)
@@ -78,6 +80,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
 
     const p = persisted.params
     if (p) {
+      if (p.boardType === 'concept' || p.boardType === 'industry') setBoardType(p.boardType)
       setYears(Number.isFinite(p.years) ? p.years : 10)
       setIndustries(Number.isFinite(p.industries) ? p.industries : 10)
       setStocksPerIndustry(Number.isFinite(p.stocksPerIndustry) ? p.stocksPerIndustry : 2)
@@ -119,6 +122,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
                 top,
                 industries,
                 stocksPerIndustry,
+                boardType,
               },
               ac.signal,
             )
@@ -132,6 +136,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
                     top,
                     industries,
                     stocksPerIndustry,
+                    boardType,
                   },
                   data: d,
                 })
@@ -151,6 +156,33 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
 
       <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 p-3">
         <div className="text-xs text-slate-400">参数</div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-slate-400">板块</div>
+          <button
+            type="button"
+            onClick={() => setBoardType('industry')}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              boardType === 'industry'
+                ? 'border-sky-700 bg-sky-950 text-sky-200'
+                : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+            )}
+          >
+            行业
+          </button>
+          <button
+            type="button"
+            onClick={() => setBoardType('concept')}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              boardType === 'concept'
+                ? 'border-sky-700 bg-sky-950 text-sky-200'
+                : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800',
+            )}
+          >
+            概念
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <div className="text-xs text-slate-400">年数</div>
           <input
@@ -223,7 +255,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
       {data ? (
         <div className="mt-3 space-y-4">
           <div className="text-xs text-slate-500">
-            更新日期 {data.asOfDate} · 分析行业 {data.meta.analyzedIndustries}/{data.meta.industryCount} · 数据源 {data.meta.source}
+            更新日期 {data.asOfDate} · 口径 {data.meta.boardType === 'concept' ? '概念' : '行业'} · 分析 {data.meta.analyzedIndustries}/{data.meta.industryCount} · 数据源 {data.meta.source}
             {data.meta.computeMs ? <span> · 计算 {Math.round(data.meta.computeMs)}ms</span> : null}
             {data.meta.partial ? <span className="ml-2 text-amber-200">（本次结果为快速版/部分计算）</span> : null}
           </div>

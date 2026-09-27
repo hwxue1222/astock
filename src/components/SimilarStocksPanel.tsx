@@ -276,7 +276,7 @@ export default function SimilarStocksPanel(props: {
 
       <div className="mt-2 text-xs text-slate-500">候选范围：涨幅榜前100 + 跌幅榜前100</div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => {
@@ -302,7 +302,7 @@ export default function SimilarStocksPanel(props: {
             const key = JSON.stringify({ symbol: compareSymbol, input })
             setRequest({ symbol: compareSymbol, input, key })
           }}
-          className="inline-flex flex-1 items-center justify-center rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-900 hover:bg-white"
+          className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
         >
           计算相似股清单
         </button>
