@@ -329,7 +329,7 @@ export default function SimilarStocksPanel(props: {
             />
             标准5
           </label>
-          <div className="text-xs text-slate-400">揉搓线</div>
+          <div className="text-xs text-slate-400">揉搓线（近15日内出现）</div>
         </div>
       </div>
 

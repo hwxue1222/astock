@@ -755,6 +755,20 @@ export function detectKlinePatterns(candles: Candle[]): KlinePatternHit[] {
     .slice(0, 25)
 }
 
+export function hasPatternInLastNDays(candles: Candle[], patternId: KlinePatternId, lookbackDays: number): boolean {
+  const list = (candles ?? []).filter((c) =>
+    [c.open, c.close, c.high, c.low].every((x) => Number.isFinite(x)) && c.ts,
+  )
+  const n = Math.max(1, Math.min(60, Math.floor(lookbackDays)))
+  if (!list.length) return false
+  const start = Math.max(0, list.length - n)
+  for (let end = list.length - 1; end >= start; end -= 1) {
+    const hits = detectKlinePatterns(list.slice(0, end + 1))
+    if (hits.some((h) => h.id === patternId)) return true
+  }
+  return false
+}
+
 export function detectStrongPatterns(candles: Candle[]): KlinePatternHit[] {
   return detectKlinePatterns(candles).filter((x) => x.kind === 'strong')
 }

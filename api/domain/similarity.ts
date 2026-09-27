@@ -2,7 +2,7 @@ import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getEastmoneyClist } from '../providers/eastmoneyClist.js'
 import { getSinaSpotDataset } from '../providers/ashareSinaSpot.js'
 import { getTencentKline } from '../providers/tencentKline.js'
-import { detectKlinePatterns } from './klineStrongPatterns.js'
+import { detectKlinePatterns, hasPatternInLastNDays } from './klineStrongPatterns.js'
 
 type Candle = {
   ts: string
@@ -383,8 +383,7 @@ export async function findSimilarStocks(input: {
 
   const passStd5 = (candles: Candle[]): boolean => {
     if (!enabled.has(5)) return true
-    const hits = detectKlinePatterns(candles)
-    return hits.some((h) => h.id === 'roucuo_line')
+    return hasPatternInLastNDays(candles, 'roucuo_line', 15)
   }
 
   const nameByCode = new Map<string, string>()
