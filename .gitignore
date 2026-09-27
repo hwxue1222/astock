@@ -37,4 +37,8 @@ coverage
 .trae/
 .venv-ocr/
 .venv-pdf/
+notes/
+tools/
+scripts/ad_smoke_test.py
+api/routes/video.ts
 tools/tessdata/*.traineddata
