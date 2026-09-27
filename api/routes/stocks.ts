@@ -662,7 +662,7 @@ router.get(
     const enabled = enabledRaw
       .split(',')
       .map((x) => Number(String(x).trim()))
-      .filter((x): x is 1 | 2 | 3 | 4 => x === 1 || x === 2 || x === 3 || x === 4)
+      .filter((x): x is 1 | 2 | 3 | 4 | 5 => x === 1 || x === 2 || x === 3 || x === 4 || x === 5)
     const enabledUniq = Array.from(new Set(enabled))
 
     const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)

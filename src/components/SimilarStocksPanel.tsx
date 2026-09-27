@@ -46,12 +46,13 @@ export default function SimilarStocksPanel(props: {
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const currentPlannedKey = useMemo(() => {
-    const enabled: Array<1 | 2 | 3 | 4> = [
+    const enabled: Array<1 | 2 | 3 | 4 | 5> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
       standards.s4.enabled ? 4 : null,
-    ].filter((x): x is 1 | 2 | 3 | 4 => x !== null)
+      standards.s5.enabled ? 5 : null,
+    ].filter((x): x is 1 | 2 | 3 | 4 | 5 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -318,6 +319,18 @@ export default function SimilarStocksPanel(props: {
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s5.enabled}
+              onChange={(e) => setStandard('s5', { enabled: e.target.checked })}
+            />
+            标准5
+          </label>
+          <div className="text-xs text-slate-400">揉搓线</div>
+        </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">候选范围：涨幅榜前100 + 跌幅榜前100</div>
@@ -326,12 +339,13 @@ export default function SimilarStocksPanel(props: {
         <button
           type="button"
           onClick={() => {
-            const enabled: Array<1 | 2 | 3 | 4> = [
+            const enabled: Array<1 | 2 | 3 | 4 | 5> = [
               standards.s1.enabled ? 1 : null,
               standards.s2.enabled ? 2 : null,
               standards.s3.enabled ? 3 : null,
               standards.s4.enabled ? 4 : null,
-            ].filter((x): x is 1 | 2 | 3 | 4 => x !== null)
+              standards.s5.enabled ? 5 : null,
+            ].filter((x): x is 1 | 2 | 3 | 4 | 5 => x !== null)
 
             const input: SimilarInput = {
               days: props.days,

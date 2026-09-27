@@ -42,6 +42,7 @@ export type KlinePatternId =
   | 'ascending_triangle'
   | 'flag_consolidation'
   | 'inside_days_cluster'
+  | 'roucuo_line'
 
 export type KlinePatternHit = {
   id: KlinePatternId
@@ -153,6 +154,60 @@ function avgVolume(candles: Candle[], lookback: number): number {
   const list = lastN(candles, lookback)
   if (!list.length) return 0
   return list.reduce((a, b) => a + (b.volume || 0), 0) / list.length
+}
+
+function detectRoucuoLine(candles: Candle[]): KlinePatternHit | null {
+  if (candles.length < 55) return null
+
+  const consDays = 6
+  const cons = lastN(candles, consDays)
+  if (cons.length !== consDays) return null
+
+  const closes = candles.map((c) => c.close)
+  const ma20 = sma(closes, 20)
+  const i = candles.length - 1
+  if (!Number.isFinite(ma20[i])) return null
+
+  const last = cons[cons.length - 1]
+  const lastRangePct = safeDiv(candleRange(last), last.open || 1)
+  if (last.close < (ma20[i] as number)) return null
+  if (lastRangePct > 0.045) return null
+
+  const isSmallConsCandle = (c: Candle): boolean => {
+    const r = candleRange(c)
+    if (!(r > 0)) return false
+    const body = candleBody(c)
+    const rangePct = safeDiv(r, c.open || 1)
+    const bodyRatio = safeDiv(body, r)
+    return rangePct <= 0.05 && bodyRatio <= 0.55
+  }
+  if (cons.filter(isSmallConsCandle).length < 5) return null
+
+  const maxH = Math.max(...cons.map((c) => c.high))
+  const minL = Math.min(...cons.map((c) => c.low))
+  const mid = cons.reduce((a, b) => a + b.close, 0) / cons.length
+  const width = safeDiv(maxH - minL, mid || 1)
+  if (width > 0.04) return null
+
+  const vols = cons.map((c) => c.volume || 0)
+  const prev20 = candles.slice(0, -consDays)
+  const v20 = avgVolume(prev20, 20)
+  const lastVol = vols[vols.length - 1]
+  if (!(v20 > 0 && lastVol > 0 && lastVol <= v20 * 0.8)) return null
+
+  let downStreak = 0
+  for (let k = 1; k < vols.length; k += 1) {
+    if (vols[k] <= vols[k - 1]) downStreak += 1
+  }
+  if (downStreak < 3) return null
+
+  const priorTrend = trendPct(prev20, 20)
+  if (priorTrend < 6) return null
+
+  const tightScore = clamp((0.04 - width) / 0.04, 0, 1)
+  const volScore = clamp((v20 * 0.8 - lastVol) / Math.max(1e-9, v20 * 0.8), 0, 1)
+  const score = clamp(0.62 + tightScore * 0.18 + volScore * 0.15, 0, 0.95)
+  return { id: 'roucuo_line', name: '揉搓线', kind: 'range_ready', score }
 }
 
 function detectBullishEngulfing(candles: Candle[]): KlinePatternHit | null {
@@ -691,6 +746,7 @@ export function detectKlinePatterns(candles: Candle[]): KlinePatternHit[] {
     detectAscendingTriangle(list),
     detectFlagConsolidation(list),
     detectInsideDaysCluster(list),
+    detectRoucuoLine(list),
   ]
 
   return hits

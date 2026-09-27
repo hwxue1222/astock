@@ -23,6 +23,7 @@ interface StockState {
     s2: { enabled: boolean; lastDays: number; minSimilarity: number }
     s3: { enabled: boolean; lastDays: number; changePct: number; volumeMultiple: number }
     s4: { enabled: boolean; minOverlap: number }
+    s5: { enabled: boolean }
   }
   similarLast: { key: string; data: SimilarStocksResponse; atISO: string } | null
   thsClassicParsedByUrl: Record<string, { codes: string[]; atISO: string }>
@@ -92,6 +93,7 @@ export const useStockStore = create<StockState>()(
         s2: { enabled: false, lastDays: 5, minSimilarity: 0.8 },
         s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
         s4: { enabled: false, minOverlap: 1 },
+        s5: { enabled: false },
       },
       similarLast: null,
       thsClassicParsedByUrl: {},
@@ -236,10 +238,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 17,
+      version: 18,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 17) return persisted
+        if (version >= 18) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -274,6 +276,7 @@ export const useStockStore = create<StockState>()(
             s2: { enabled: false, lastDays: 5, minSimilarity: 0.8 },
             s3: { enabled: false, lastDays: 5, changePct: 9.98, volumeMultiple: 2 },
             s4: { enabled: false, minOverlap: 1 },
+            s5: { enabled: false },
           },
           similarLast: null,
           thsClassicParsedByUrl: {},

@@ -283,7 +283,7 @@ export async function findSimilarStocks(input: {
   anchorDate?: string
   candidateSymbols?: string[]
   maxCandidates?: number
-  enabled: Array<1 | 2 | 3 | 4>
+  enabled: Array<1 | 2 | 3 | 4 | 5>
   s1MaxMarketCapYi: number
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
@@ -312,7 +312,8 @@ export async function findSimilarStocks(input: {
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
   const baseLimit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
   const limit = enabled.has(4) ? Math.max(baseLimit, 220) : baseLimit
-  const fetchLimit = input.anchorDate ? Math.max(limit, 900) : limit
+  const limit2 = enabled.has(5) ? Math.max(limit, 140) : limit
+  const fetchLimit = input.anchorDate ? Math.max(limit2, 900) : limit2
   const klineFqt = enabled.has(3) ? '0' : '1'
 
   const anchorDate = input.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate) ? input.anchorDate : undefined
@@ -340,6 +341,12 @@ export async function findSimilarStocks(input: {
       return Number.isFinite(ms) && ms <= anchorMs
     })
     return filtered
+  }
+
+  const passStd5 = (candles: Candle[]): boolean => {
+    if (!enabled.has(5)) return true
+    const hits = detectKlinePatterns(candles)
+    return hits.some((h) => h.id === 'roucuo_line')
   }
 
   const nameByCode = new Map<string, string>()
@@ -482,6 +489,57 @@ export async function findSimilarStocks(input: {
     return { target, candidates: candidates.length, top: out, meta: { window } }
   }
 
+  if (enabled.size === 1 && enabled.has(5)) {
+    const want = top
+    const picked: Array<SimilarStock & { idx: number; pScore: number }> = []
+    const pickedSet = new Set<string>()
+    let i = 0
+
+    const workers = new Array(4).fill(null).map(async () => {
+      while (true) {
+        if (picked.length >= want) return
+        const idx = i
+        i += 1
+        if (idx >= candidates.length) return
+        const code = candidates[idx]
+        try {
+          const candles = await getCandlesCached({
+            code,
+            klt: '101',
+            fqt: klineFqt,
+            limit: fetchLimit,
+            ttlMs: 10 * 60 * 1000,
+            timeoutMs: 12_000,
+            fallbackToTencent: true,
+          })
+          const candlesAsOf = sliceAsOf(candles)
+          const hits = detectKlinePatterns(candlesAsOf)
+          const hit = hits.find((h) => h.id === 'roucuo_line')
+          if (!hit) continue
+
+          if (pickedSet.has(code)) continue
+          pickedSet.add(code)
+          picked.push({
+            symbol: code,
+            name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+            score: clamp01(0.5 + hit.score * 0.5),
+            idx,
+            pScore: hit.score,
+          })
+        } catch {
+          continue
+        }
+      }
+    })
+
+    await Promise.all(workers)
+    const out = picked
+      .sort((a, b) => b.pScore - a.pScore)
+      .slice(0, top)
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
+    return { target, candidates: candidates.length, top: out, meta: { window } }
+  }
+
   const passStd3 = (candles: Candle[]): boolean => {
     const cs = sliceAsOf(candles)
     const xs = cs.slice(-1 * (s3LastDays + 1))
@@ -496,7 +554,7 @@ export async function findSimilarStocks(input: {
     return false
   }
 
-  if (enabled.has(3) && !enabled.has(2)) {
+  if (enabled.size === 1 && enabled.has(3)) {
     const want = top
     const picked: Array<SimilarStock & { idx: number }> = []
     const pickedSet = new Set<string>()
@@ -558,6 +616,10 @@ export async function findSimilarStocks(input: {
         fallbackToTencent: true,
       })
       const candlesAsOf = sliceAsOf(candles)
+
+      if (enabled.has(5)) {
+        if (!passStd5(candlesAsOf)) return null
+      }
       if (enabled.has(3)) {
         if (!passStd3(candlesAsOf)) return null
       }
