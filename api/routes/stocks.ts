@@ -24,6 +24,8 @@ import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
 import { buildIndustryRotationForecast } from '../domain/industryRotation.js'
 import { buildIndustryMonthlyFlowSeasonality } from '../domain/industryFlowSeasonality.js'
 import { buildBoardFlowRolling } from '../domain/boardFlowRolling.js'
+import { getEastmoneyBoardConstituents } from '../providers/eastmoneyBoards.js'
+import { cacheFilePath, readJsonCache, writeJsonCache } from '../providers/fsCache.js'
 import { fetchKlineRobust, fetchFinancialRobust, mergeQuoteWithSina, galaxyBridgeUrl } from '../providers/multiSource.js'
 import { mxStockDiagnosis, mxScreenStocks, isMxAvailable } from '../providers/dongcaiMx.js'
 
@@ -261,6 +263,41 @@ router.get('/moneyflow/boards/rolling', async (req: Request, res: Response): Pro
     res.status(502).json({
       success: false,
       error: 'Board rolling moneyflow unavailable (real data required)',
+      detail: errorMessage(e),
+    })
+  }
+})
+
+router.get('/boards/:boardCode/stocks', async (req: Request, res: Response): Promise<void> => {
+  const boardCode = String(req.params.boardCode ?? '').trim()
+  const top = Number(req.query.top ?? 200)
+  const cappedTop = Number.isFinite(top) ? Math.max(1, Math.min(200, top)) : 200
+  const cacheKey = `board_constituents_${boardCode}_top${cappedTop}.json`
+  const cachePath = cacheFilePath(cacheKey)
+
+  const cached = await readJsonCache<{ boardCode: string; items: unknown[] }>(cachePath, { ttlSeconds: 24 * 3600 })
+  if (cached?.items?.length) {
+    res.status(200).json({ success: true, ...cached, stale: false })
+    return
+  }
+  try {
+    const items = await getEastmoneyBoardConstituents({
+      boardCode,
+      top: cappedTop,
+      timeoutMs: 15_000,
+    })
+    const payload = { boardCode, items }
+    await writeJsonCache(cachePath, payload)
+    res.status(200).json({ success: true, ...payload, stale: false })
+  } catch (e: unknown) {
+    const stale = await readJsonCache<{ boardCode: string; items: unknown[] }>(cachePath, { ttlSeconds: 365 * 24 * 3600 })
+    if (stale?.items?.length) {
+      res.status(200).json({ success: true, ...stale, stale: true, warning: errorMessage(e) })
+      return
+    }
+    res.status(502).json({
+      success: false,
+      error: 'Board constituents unavailable (real data required)',
       detail: errorMessage(e),
     })
   }

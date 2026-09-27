@@ -291,6 +291,18 @@ export type BoardFlowRollingResponse = {
   }
 }
 
+export type BoardConstituent = {
+  symbol: string
+  name?: string
+  changePct?: number
+  marketCapYuan?: number
+}
+
+export type BoardConstituentsResponse = {
+  boardCode: string
+  items: BoardConstituent[]
+}
+
 export type IndustryMoneyflowItem = {
   name: string
   avgPrice: number

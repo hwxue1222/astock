@@ -18,6 +18,7 @@ import type {
   StockQuotesResponse,
   IndustryRotationForecastResponse,
   BoardFlowRollingResponse,
+  BoardConstituentsResponse,
 } from '@/types/stock'
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -292,6 +293,20 @@ export async function getBoardFlowRolling(
   if (typeof input?.maxComputeMs === 'number') q.set('maxComputeMs', String(input.maxComputeMs))
   const data = await fetchJson<{ success: boolean } & BoardFlowRollingResponse>(
     `/api/stocks/moneyflow/boards/rolling?${q.toString()}`,
+    signal,
+  )
+  return data
+}
+
+export async function getBoardConstituents(
+  boardCode: string,
+  input?: { top?: number },
+  signal?: AbortSignal,
+): Promise<BoardConstituentsResponse> {
+  const q = new URLSearchParams()
+  if (typeof input?.top === 'number') q.set('top', String(input.top))
+  const data = await fetchJson<{ success: boolean } & BoardConstituentsResponse>(
+    `/api/stocks/boards/${encodeURIComponent(boardCode)}/stocks?${q.toString()}`,
     signal,
   )
   return data

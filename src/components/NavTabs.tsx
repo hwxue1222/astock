@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import ChangePasswordModal from './ChangePasswordModal'
 
-type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar'
+type TabKey = 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar' | 'conceptFlow'
+
+const HOME_TAB_STORAGE_KEY = 'home:activeTab'
 
 const TAB_LIST: { key: TabKey; label: string }[] = [
   { key: 'overview', label: '📊 宏观概览' },
@@ -11,19 +13,39 @@ const TAB_LIST: { key: TabKey; label: string }[] = [
   { key: 'lifeline', label: '🎯 5阶段策略' },
   { key: 'rotation', label: '🔥 行业轮动' },
   { key: 'similar', label: '🔍 相似股票' },
+  { key: 'conceptFlow', label: '🧩 概念资金流' },
 ]
+
+function normalizeHomeTab(v: unknown): 'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar' | null {
+  const s = typeof v === 'string' ? v : ''
+  if (s === 'overview' || s === 'watchlist' || s === 'lifeline' || s === 'rotation' || s === 'similar') return s
+  return null
+}
 
 export default function NavTabs(): JSX.Element {
   const navigate = useNavigate()
   const location = useLocation()
   const [showPwdModal, setShowPwdModal] = useState(false)
+  const [homeTab, setHomeTab] = useState<'overview' | 'watchlist' | 'lifeline' | 'rotation' | 'similar'>('overview')
 
-  // 判断当前激活的标签（仅在首页 / 路径下高亮）
+  useEffect(() => {
+    if (location.pathname !== '/') return
+    try {
+      const persisted = normalizeHomeTab(window.localStorage.getItem(HOME_TAB_STORAGE_KEY))
+      if (persisted) setHomeTab(persisted)
+    } catch {
+      void 0
+    }
+  }, [location.pathname])
+
   const activeTab: TabKey | null = (() => {
+    if (location.pathname === '/concept-flow' || location.pathname.startsWith('/concept-flow/')) return 'conceptFlow'
+    if (location.pathname === '/lifeline' || location.pathname === '/lifeline-monitor') return 'lifeline'
+    if (location.pathname === '/watchlist') return 'watchlist'
     if (location.pathname !== '/') return null
-    const stateTab = (location.state as { activeTab?: string } | null)?.activeTab
-    if (stateTab && TAB_LIST.some((t) => t.key === stateTab)) return stateTab as TabKey
-    return 'overview'
+    const stateTab = normalizeHomeTab((location.state as { activeTab?: string } | null)?.activeTab)
+    if (stateTab) return stateTab
+    return homeTab
   })()
 
   return (
@@ -37,7 +59,15 @@ export default function NavTabs(): JSX.Element {
               onClick={() => {
                 if (tab.key === 'lifeline') {
                   navigate('/lifeline')
+                } else if (tab.key === 'conceptFlow') {
+                  navigate('/concept-flow?boardType=concept&days=14&top=20')
                 } else {
+                  try {
+                    window.localStorage.setItem(HOME_TAB_STORAGE_KEY, tab.key)
+                  } catch {
+                    void 0
+                  }
+                  setHomeTab(tab.key)
                   navigate('/', { state: { activeTab: tab.key } })
                 }
               }}
