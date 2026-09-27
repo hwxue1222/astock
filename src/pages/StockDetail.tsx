@@ -329,7 +329,8 @@ export default function StockDetail() {
     return q.toString()
   }, [navBoardCode, navBoardType, navDays, navMode, navTop])
 
-  const useBoardNav = navMode === 'board' && boardNavIndex >= 0
+  const inBoardContext = navMode === 'board' && /^BK\d{4}$/.test(navBoardCode)
+  const canBoardNav = inBoardContext && boardNavIndex >= 0
 
   // 自选股翻页索引（基于快照，不受实时取消自选影响）
   const snapshot = watchlistSnapshotRef.current
@@ -351,7 +352,7 @@ export default function StockDetail() {
         selectedSymbol={routeSymbol}
         onSelectSymbol={(s) => {
           setHighlightEventId(null)
-          if (useBoardNav && boardNavSearch) {
+          if (inBoardContext && boardNavSearch) {
             navigate(`/stocks/${encodeURIComponent(s)}?${boardNavSearch}`)
             return
           }
@@ -359,7 +360,7 @@ export default function StockDetail() {
         }}
         updatedAt={updatedAt}
         onBack={() => {
-          if (useBoardNav && /^BK\d{4}$/.test(navBoardCode)) {
+          if (inBoardContext) {
             const backQs = new URLSearchParams()
             backQs.set('boardType', navBoardType)
             if (Number.isFinite(navDays)) backQs.set('days', String(navDays))
@@ -413,7 +414,7 @@ export default function StockDetail() {
               <div className="mt-1 text-xs text-slate-500">事件时间线 · 信号解释 · 财务比率口径</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {useBoardNav ? (
+              {canBoardNav ? (
                 <>
                   <button
                     type="button"
