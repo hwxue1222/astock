@@ -333,7 +333,14 @@ export default function SimilarStocksPanel(props: {
         </div>
       </div>
 
-      <div className="mt-2 text-xs text-slate-500">候选范围：涨幅榜前100 + 跌幅榜前100</div>
+      <div className="mt-2 text-xs text-slate-500">
+        候选范围：
+        {data?.meta?.candidatePool === 'full_market'
+          ? `全A股（来源：${data?.meta?.candidateSource || 'unknown'}；候选数：${data?.candidates ?? 0}）`
+          : data?.meta?.candidatePool === 'custom'
+            ? `自定义（候选数：${data?.candidates ?? 0}）`
+            : '全A股'}
+      </div>
 
       <div className="mt-3 flex items-center justify-end gap-2">
         <button

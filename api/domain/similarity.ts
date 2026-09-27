@@ -26,6 +26,31 @@ type UniverseEntry = {
   marketCapYuan?: number
 }
 
+type GalaxyBridgeCodesResp = {
+  items?: Array<{ code?: string; name?: string }>
+}
+
+async function fetchGalaxyBridgeCodes(input: { limit: number; timeoutMs?: number }): Promise<UniverseEntry[]> {
+  const base = (process.env.GALAXY_BRIDGE_URL ?? '').trim()
+  if (!base) return []
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), input.timeoutMs ?? 15_000)
+    const resp = await fetch(`${base.replace(/\/$/, '')}/codes?limit=${Math.min(7000, Math.max(1, input.limit))}`, {
+      signal: ctrl.signal,
+    })
+    clearTimeout(t)
+    if (!resp.ok) return []
+    const data = (await resp.json()) as GalaxyBridgeCodesResp
+    const items = (data.items ?? [])
+      .map((it) => ({ code: String(it.code ?? '').trim(), name: String(it.name ?? '').trim() || undefined }))
+      .filter((x) => /^\d{6}$/.test(x.code))
+    return items
+  } catch {
+    return []
+  }
+}
+
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0
   if (n < 0) return 0
@@ -227,7 +252,7 @@ export async function getFullMarketCandidates(input: {
   applyCapLimit: boolean
   nameByCode: Map<string, string>
   capYuanByCode: Map<string, number>
-}): Promise<{ candidates: string[]; source: 'eastmoney_clist' | 'sina_spot_cache' }> {
+}): Promise<{ candidates: string[]; source: 'eastmoney_clist' | 'sina_spot_cache' | 'galaxy_bridge' }> {
   const fetchSize = Math.max(
     40,
     Math.min(200, input.applyCapLimit ? input.maxCandidates * 4 : input.maxCandidates * 2),
@@ -271,6 +296,14 @@ export async function getFullMarketCandidates(input: {
   })
   if (candidates.length) return { candidates, source: 'sina_spot_cache' }
 
+  const galaxyItems = await fetchGalaxyBridgeCodes({ limit: Math.max(200, input.maxCandidates), timeoutMs: 15_000 })
+  if (galaxyItems.length) {
+    for (const it of galaxyItems) {
+      if (it.name) input.nameByCode.set(it.code, it.name)
+    }
+    return { candidates: galaxyItems.map((x) => x.code).slice(0, input.maxCandidates), source: 'galaxy_bridge' }
+  }
+
   throw new Error('Full-market candidate pool unavailable')
 }
 
@@ -293,7 +326,12 @@ export async function findSimilarStocks(input: {
   s3ChangePct?: number
   s3VolumeMultiple?: number
   s4MinOverlap?: number
-}): Promise<{ target: string; candidates: number; top: SimilarStock[]; meta: { window: number } }> {
+}): Promise<{
+  target: string
+  candidates: number
+  top: SimilarStock[]
+  meta: { window: number; candidatePool: 'full_market' | 'custom'; candidateSource: string }
+}> {
   const target = normalizeAshareCode(input.targetSymbol)
   const top = Math.max(1, Math.min(50, input.top))
   const enabled = new Set(input.enabled)
@@ -353,27 +391,28 @@ export async function findSimilarStocks(input: {
   const capYuanByCode = new Map<string, number>()
 
   let candidates: string[]
+  let candidatePool: 'full_market' | 'custom'
+  let candidateSource: string
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
+    candidatePool = 'custom'
+    candidateSource = 'custom'
   } else {
-    const maxCandidates = Math.max(20, Math.min(200, input.maxCandidates ?? 200))
-    const n = Math.max(20, Math.min(100, Math.floor(maxCandidates / 2)))
-    const [gainers, losers] = await Promise.all([
-      getEastmoneyClist({ page: 1, pageSize: n, sort: 'pctchg_desc', timeoutMs: 12_000 }),
-      getEastmoneyClist({ page: 1, pageSize: n, sort: 'pctchg_asc', timeoutMs: 12_000 }),
-    ])
-
-    for (const it of [...gainers.items, ...losers.items]) {
-      nameByCode.set(it.code, it.name)
-      capYuanByCode.set(it.code, it.marketCapYuan)
-    }
-    candidates = Array.from(new Set([...gainers.items.map((x) => x.code), ...losers.items.map((x) => x.code)])).slice(
-      0,
+    const maxCandidates = Math.max(60, Math.min(2000, input.maxCandidates ?? 500))
+    const out = await getFullMarketCandidates({
       maxCandidates,
-    )
+      sort: 'pctchg_desc',
+      capLimitYuan,
+      applyCapLimit: enabled.has(1),
+      nameByCode,
+      capYuanByCode,
+    })
+    candidates = out.candidates
+    candidatePool = 'full_market'
+    candidateSource = out.source
   }
 
-  candidates = Array.from(new Set(candidates)).filter((c) => c !== target).slice(0, 120)
+  candidates = Array.from(new Set(candidates)).filter((c) => c !== target)
 
   if (enabled.has(1) && capYuanByCode.size) {
     candidates = candidates.filter((c) => {
@@ -394,7 +433,7 @@ export async function findSimilarStocks(input: {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, top)
-    return { target, candidates: candidates.length, top: out, meta: { window } }
+    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
   }
 
   const targetCandles = enabled.has(2) || enabled.has(3) || enabled.has(4)
@@ -486,7 +525,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => b.ratio - a.ratio)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, s4Matches: x.s4Matches }))
-    return { target, candidates: candidates.length, top: out, meta: { window } }
+    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
   }
 
   if (enabled.size === 1 && enabled.has(5)) {
@@ -537,7 +576,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => b.pScore - a.pScore)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
-    return { target, candidates: candidates.length, top: out, meta: { window } }
+    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
   }
 
   const passStd3 = (candles: Candle[]): boolean => {
@@ -598,7 +637,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => a.idx - b.idx)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
-    return { target, candidates: candidates.length, top: out, meta: { window } }
+    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
   }
 
   const rows = await mapLimit<string, SimilarStock | null>(
@@ -655,5 +694,5 @@ export async function findSimilarStocks(input: {
   )
 
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
-  return { target, candidates: candidates.length, top: scored.slice(0, top), meta: { window } }
+  return { target, candidates: candidates.length, top: scored.slice(0, top), meta: { window, candidatePool, candidateSource } }
 }

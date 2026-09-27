@@ -115,6 +115,8 @@ export interface SimilarStocksResponse {
   meta?: {
     window?: number
     source?: string
+    candidatePool?: 'full_market' | 'custom'
+    candidateSource?: string
   }
 }
 

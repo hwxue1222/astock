@@ -19,10 +19,10 @@ from datetime import datetime, timedelta
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
-AD_USERNAME = os.getenv('AD_USERNAME', '210600007723')
-AD_PASSWORD = os.getenv('AD_PASSWORD', '19781222')
-AD_HOST = os.getenv('AD_HOST', '101.230.159.234')
-AD_PORT = int(os.getenv('AD_PORT', '8600'))
+AD_USERNAME = os.getenv('AD_USERNAME', '')
+AD_PASSWORD = os.getenv('AD_PASSWORD', '')
+AD_HOST = os.getenv('AD_HOST', '')
+AD_PORT = int(os.getenv('AD_PORT', '0') or '0')
 BRIDGE_PORT = int(os.getenv('GALAXY_BRIDGE_PORT', '8601'))
 
 _ad = None
@@ -30,6 +30,8 @@ _ad = None
 def get_ad():
     global _ad
     if _ad is None:
+        if not AD_USERNAME or not AD_PASSWORD or not AD_HOST or not AD_PORT:
+            raise RuntimeError('Missing AD credentials: AD_USERNAME/AD_PASSWORD/AD_HOST/AD_PORT')
         import AmazingData as ad
         ad.login(username=AD_USERNAME, password=AD_PASSWORD, host=AD_HOST, port=AD_PORT)
         _ad = ad
@@ -75,6 +77,29 @@ def fetch_kline(code6: str, limit: int):
     ]
 
 
+def fetch_codes(limit: int):
+    ad = get_ad()
+    base = ad.BaseData()
+    df = base.get_code_list(security_type='EXTRA_STOCK_A')
+    cols = list(df.columns)
+    code_col = next((c for c in cols if 'code' in str(c).lower()), None)
+    name_col = next((c for c in cols if 'name' in str(c).lower()), None)
+    if code_col is None:
+        raise RuntimeError('code_list missing code column')
+    rows = []
+    for r in df.itertuples(index=False):
+        row = r._asdict() if hasattr(r, '_asdict') else dict(zip(cols, r))
+        raw = str(row.get(code_col, '')).strip()
+        code6 = raw.split('.')[0]
+        if len(code6) != 6 or not code6.isdigit():
+            continue
+        name = str(row.get(name_col, '')).strip() if name_col else ''
+        rows.append({'code': code6, 'name': name})
+        if len(rows) >= limit:
+            break
+    return rows
+
+
 import pandas as pd  # noqa: E402  (银河SDK依赖)
 
 
@@ -85,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path == '/health':
-            self._json({'ok': True, 'service': 'galaxy-bridge'})
+            self._json({'ok': True, 'service': 'galaxy-bridge', 'ad': bool(AD_USERNAME and AD_HOST and AD_PORT)})
             return
         if parsed.path == '/kline':
             qs = parse_qs(parsed.query)
@@ -99,6 +124,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({'candles': candles, 'source': 'galaxy_mx'})
             except Exception as e:
                 self._json({'error': str(e), 'candles': []}, 502)
+            return
+        if parsed.path == '/codes':
+            qs = parse_qs(parsed.query)
+            limit = int(qs.get('limit', ['5000'])[0] or 5000)
+            try:
+                items = fetch_codes(min(limit, 7000))
+                self._json({'items': items, 'source': 'galaxy_ad'})
+            except Exception as e:
+                self._json({'error': str(e), 'items': []}, 502)
             return
         self._json({'error': 'not found'}, 404)
 
@@ -114,6 +148,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     print(f'🚀 银河星耀数智 Bridge 启动: http://localhost:{BRIDGE_PORT}')
-    print(f'   账号: {AD_USERNAME}@{AD_HOST}:{AD_PORT}')
     print(f'   测试: http://localhost:{BRIDGE_PORT}/health')
     HTTPServer(('127.0.0.1', BRIDGE_PORT), Handler).serve_forever()
