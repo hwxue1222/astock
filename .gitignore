@@ -32,3 +32,9 @@ coverage
 *.sln
 *.sw?
 .vite
+.ocr/
+.ocr_tmp/
+.trae/
+.venv-ocr/
+.venv-pdf/
+tools/tessdata/*.traineddata

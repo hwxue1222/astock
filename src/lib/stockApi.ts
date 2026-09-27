@@ -153,7 +153,7 @@ export async function getSimilarStocks(
     top: number
     klt: KlineKlt
     fqt: KlineFqt
-    enabled?: Array<1 | 2 | 3>
+    enabled?: Array<1 | 2 | 3 | 4>
     s1MaxMarketCapYi?: number
     s2LastDays?: number
     s2TurnoverSpikeMultiple?: number
@@ -162,6 +162,7 @@ export async function getSimilarStocks(
     s3ChangePct?: number
     s3VolumeMultiple?: number
     s3LastDays?: number
+    s4MinOverlap?: number
     candidates?: string[]
   },
   signal?: AbortSignal,
@@ -181,6 +182,7 @@ export async function getSimilarStocks(
   if (typeof input.s3ChangePct === 'number') q.set('s3ChangePct', String(input.s3ChangePct))
   if (typeof input.s3VolumeMultiple === 'number') q.set('s3VolumeMultiple', String(input.s3VolumeMultiple))
   if (typeof input.s3LastDays === 'number') q.set('s3LastDays', String(input.s3LastDays))
+  if (typeof input.s4MinOverlap === 'number') q.set('s4MinOverlap', String(input.s4MinOverlap))
   if (input.candidates?.length) q.set('candidates', input.candidates.join(','))
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/similar?${q.toString()}`,

@@ -43,11 +43,12 @@ export default function SimilarStocksPanel(props: {
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const currentPlannedKey = useMemo(() => {
-    const enabled: Array<1 | 2 | 3> = [
+    const enabled: Array<1 | 2 | 3 | 4> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
-    ].filter((x): x is 1 | 2 | 3 => x !== null)
+      standards.s4.enabled ? 4 : null,
+    ].filter((x): x is 1 | 2 | 3 | 4 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -61,6 +62,7 @@ export default function SimilarStocksPanel(props: {
       s3LastDays: standards.s3.lastDays,
       s3ChangePct: standards.s3.changePct,
       s3VolumeMultiple: standards.s3.volumeMultiple,
+      s4MinOverlap: standards.s4.minOverlap,
     }
 
     return JSON.stringify({ symbol: compareSymbol, input })
@@ -272,6 +274,28 @@ export default function SimilarStocksPanel(props: {
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s4.enabled}
+              onChange={(e) => setStandard('s4', { enabled: e.target.checked })}
+            />
+            标准4
+          </label>
+          <div className="text-xs text-slate-400">33种强势形态交集 ≥</div>
+          <input
+            inputMode="numeric"
+            value={String(standards.s4.minOverlap)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const v = raw ? Math.max(1, Math.min(10, Number(raw))) : 1
+              setStandard('s4', { minOverlap: v })
+            }}
+            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+        </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">候选范围：涨幅榜前100 + 跌幅榜前100</div>
@@ -280,11 +304,12 @@ export default function SimilarStocksPanel(props: {
         <button
           type="button"
           onClick={() => {
-            const enabled: Array<1 | 2 | 3> = [
+            const enabled: Array<1 | 2 | 3 | 4> = [
               standards.s1.enabled ? 1 : null,
               standards.s2.enabled ? 2 : null,
               standards.s3.enabled ? 3 : null,
-            ].filter((x): x is 1 | 2 | 3 => x !== null)
+              standards.s4.enabled ? 4 : null,
+            ].filter((x): x is 1 | 2 | 3 | 4 => x !== null)
 
             const input: SimilarInput = {
               days: props.days,
@@ -298,6 +323,7 @@ export default function SimilarStocksPanel(props: {
               s3LastDays: standards.s3.lastDays,
               s3ChangePct: standards.s3.changePct,
               s3VolumeMultiple: standards.s3.volumeMultiple,
+              s4MinOverlap: standards.s4.minOverlap,
             }
             const key = JSON.stringify({ symbol: compareSymbol, input })
             setRequest({ symbol: compareSymbol, input, key })
@@ -324,6 +350,7 @@ export default function SimilarStocksPanel(props: {
               const industryName = industryBySymbol[symUpper]
               const inflowWan = industryName ? industryFlowMap.get(industryName) : undefined
               const isPositive = inflowWan !== undefined ? inflowWan >= 0 : null
+              const patternMatches = (it.s4Matches ?? []).map((x) => x.name).filter(Boolean)
 
               return (
                 <div
@@ -334,7 +361,12 @@ export default function SimilarStocksPanel(props: {
                 >
                   <button
                     type="button"
-                    onClick={() => navigate(`/stocks/${encodeURIComponent(it.symbol)}`)}
+                    onClick={() => {
+                      const qs = new URLSearchParams()
+                      qs.set('nav', 'similar')
+                      qs.set('seed', String(compareSymbol).toUpperCase())
+                      navigate(`/stocks/${encodeURIComponent(it.symbol)}?${qs.toString()}`)
+                    }}
                     className="min-w-0 flex-1 text-left hover:opacity-95"
                   >
                     <div className="truncate text-sm font-semibold text-slate-100">
@@ -355,6 +387,27 @@ export default function SimilarStocksPanel(props: {
                         </span>
                       ) : null}
                     </div>
+                    {patternMatches.length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {patternMatches.slice(0, 4).map((n) => (
+                          <span
+                            key={n}
+                            className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200"
+                            title={patternMatches.join('、')}
+                          >
+                            {n}
+                          </span>
+                        ))}
+                        {patternMatches.length > 4 ? (
+                          <span
+                            className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-400"
+                            title={patternMatches.join('、')}
+                          >
+                            +{patternMatches.length - 4}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
                   </button>
 

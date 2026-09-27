@@ -105,6 +105,7 @@ export interface SimilarStockItem {
   symbol: string
   name: string | undefined
   score: number
+  s4Matches?: Array<{ id: string; name: string }>
 }
 
 export interface SimilarStocksResponse {

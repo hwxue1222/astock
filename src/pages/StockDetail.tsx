@@ -81,6 +81,7 @@ export default function StockDetail() {
   const navBoardType = (searchParams.get('boardType') === 'theme' ? 'theme' : 'concept') as 'concept' | 'theme'
   const navDays = Number(searchParams.get('days') ?? 14)
   const navTop = Number(searchParams.get('top') ?? 20)
+  const navSimilarSeed = String(searchParams.get('seed') ?? '').trim().toUpperCase()
 
   const boardNavKey = useMemo(() => {
     return /^BK\d{4}$/.test(navBoardCode) ? `board_nav:${navBoardCode}` : null
@@ -329,7 +330,16 @@ export default function StockDetail() {
     return q.toString()
   }, [navBoardCode, navBoardType, navDays, navMode, navTop])
 
+  const similarNavSearch = useMemo(() => {
+    if (navMode !== 'similar') return ''
+    const q = new URLSearchParams()
+    q.set('nav', 'similar')
+    if (/^\d{6}$/.test(navSimilarSeed)) q.set('seed', navSimilarSeed)
+    return q.toString()
+  }, [navMode, navSimilarSeed])
+
   const inBoardContext = navMode === 'board' && /^BK\d{4}$/.test(navBoardCode)
+  const inSimilarContext = navMode === 'similar'
   const canBoardNav = inBoardContext && boardNavIndex >= 0
 
   // 自选股翻页索引（基于快照，不受实时取消自选影响）
@@ -356,6 +366,10 @@ export default function StockDetail() {
             navigate(`/stocks/${encodeURIComponent(s)}?${boardNavSearch}`)
             return
           }
+          if (inSimilarContext && similarNavSearch) {
+            navigate(`/stocks/${encodeURIComponent(s)}?${similarNavSearch}`)
+            return
+          }
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
@@ -366,6 +380,10 @@ export default function StockDetail() {
             if (Number.isFinite(navDays)) backQs.set('days', String(navDays))
             if (Number.isFinite(navTop)) backQs.set('top', String(navTop))
             navigate(`/concept-flow/${encodeURIComponent(navBoardCode)}?${backQs.toString()}`)
+            return
+          }
+          if (inSimilarContext) {
+            navigate('/', { state: { activeTab: 'similar' } })
             return
           }
           navigate('/', { state: { activeTab: 'watchlist' } })

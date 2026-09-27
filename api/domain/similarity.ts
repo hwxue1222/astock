@@ -2,6 +2,7 @@ import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getEastmoneyClist } from '../providers/eastmoneyClist.js'
 import { getSinaSpotDataset } from '../providers/ashareSinaSpot.js'
 import { getTencentKline } from '../providers/tencentKline.js'
+import { detectStrongPatterns } from './klineStrongPatterns.js'
 
 type Candle = {
   ts: string
@@ -16,6 +17,7 @@ export type SimilarStock = {
   symbol: string
   name: string | undefined
   score: number
+  s4Matches?: Array<{ id: string; name: string }>
 }
 
 type UniverseEntry = {
@@ -280,7 +282,7 @@ export async function findSimilarStocks(input: {
   top: number
   candidateSymbols?: string[]
   maxCandidates?: number
-  enabled: Array<1 | 2 | 3>
+  enabled: Array<1 | 2 | 3 | 4>
   s1MaxMarketCapYi: number
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
@@ -289,6 +291,7 @@ export async function findSimilarStocks(input: {
   s3LastDays?: number
   s3ChangePct?: number
   s3VolumeMultiple?: number
+  s4MinOverlap?: number
 }): Promise<{ target: string; candidates: number; top: SimilarStock[]; meta: { window: number } }> {
   const target = normalizeAshareCode(input.targetSymbol)
   const top = Math.max(1, Math.min(50, input.top))
@@ -302,10 +305,12 @@ export async function findSimilarStocks(input: {
   const s3LastDays = Math.max(1, Math.min(10, input.s3LastDays ?? 5))
   const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
+  const s4MinOverlap = Math.max(1, Math.min(10, input.s4MinOverlap ?? 1))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
-  const limit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
+  const baseLimit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
+  const limit = enabled.has(4) ? Math.max(baseLimit, 220) : baseLimit
   const klineFqt = enabled.has(3) ? '0' : '1'
 
   const nameByCode = new Map<string, string>()
@@ -356,7 +361,7 @@ export async function findSimilarStocks(input: {
     return { target, candidates: candidates.length, top: out, meta: { window } }
   }
 
-  const targetCandles = enabled.has(2) || enabled.has(3)
+  const targetCandles = enabled.has(2) || enabled.has(3) || enabled.has(4)
     ? await getCandlesCached({
         code: target,
         klt: '101',
@@ -369,7 +374,76 @@ export async function findSimilarStocks(input: {
     : []
 
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
-  void targetCandles
+
+  const targetPatternHits = enabled.has(4) ? detectStrongPatterns(targetCandles) : []
+  const targetPatternIds = enabled.has(4) ? new Set(targetPatternHits.map((x) => x.id)) : new Set<string>()
+
+  const passStd4 = (
+    candles: Candle[],
+  ): { ok: boolean; overlap: number; ratio: number; matches: Array<{ id: string; name: string }> } => {
+    if (!enabled.has(4)) return { ok: true, overlap: 0, ratio: 0, matches: [] }
+    if (!targetPatternIds.size) return { ok: false, overlap: 0, ratio: 0, matches: [] }
+    const cand = detectStrongPatterns(candles)
+    if (!cand.length) return { ok: false, overlap: 0, ratio: 0, matches: [] }
+
+    const matches = cand
+      .filter((x) => targetPatternIds.has(x.id))
+      .sort((a, b) => b.score - a.score)
+      .map((x) => ({ id: x.id, name: x.name }))
+    const overlap = matches.length
+    const ratio = overlap / Math.max(1, targetPatternIds.size)
+    return { ok: overlap >= s4MinOverlap, overlap, ratio, matches }
+  }
+
+  if (enabled.size === 1 && enabled.has(4)) {
+    const want = top
+    const picked: Array<SimilarStock & { idx: number; ratio: number }> = []
+    const pickedSet = new Set<string>()
+    let i = 0
+
+    const workers = new Array(4).fill(null).map(async () => {
+      while (true) {
+        if (picked.length >= want) return
+        const idx = i
+        i += 1
+        if (idx >= candidates.length) return
+        const code = candidates[idx]
+        try {
+          const candles = await getCandlesCached({
+            code,
+            klt: '101',
+            fqt: klineFqt,
+            limit,
+            ttlMs: 10 * 60 * 1000,
+            timeoutMs: 12_000,
+            fallbackToTencent: true,
+          })
+          const s4 = passStd4(candles)
+          if (!s4.ok) continue
+
+          if (pickedSet.has(code)) continue
+          pickedSet.add(code)
+          picked.push({
+            symbol: code,
+            name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+            score: clamp01(0.5 + s4.ratio * 0.5),
+            idx,
+            ratio: s4.ratio,
+            s4Matches: s4.matches,
+          })
+        } catch {
+          continue
+        }
+      }
+    })
+
+    await Promise.all(workers)
+    const out = picked
+      .sort((a, b) => b.ratio - a.ratio)
+      .slice(0, top)
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, s4Matches: x.s4Matches }))
+    return { target, candidates: candidates.length, top: out, meta: { window } }
+  }
 
   const passStd3 = (candles: Candle[]): boolean => {
     const xs = candles.slice(-1 * (s3LastDays + 1))
@@ -431,7 +505,10 @@ export async function findSimilarStocks(input: {
     return { target, candidates: candidates.length, top: out, meta: { window } }
   }
 
-  const rows = await mapLimit(candidates, enabled.has(2) || enabled.has(3) ? 4 : 2, async (code) => {
+  const rows = await mapLimit<string, SimilarStock | null>(
+    candidates,
+    enabled.has(2) || enabled.has(3) ? 4 : 2,
+    async (code) => {
     try {
       const candles = await getCandlesCached({
         code,
@@ -446,6 +523,9 @@ export async function findSimilarStocks(input: {
         if (!passStd3(candles)) return null
       }
 
+      const s4 = passStd4(candles)
+      if (!s4.ok) return null
+
       if (enabled.has(2)) {
         const fv = buildDailyShapeFeature({ candles, lastDays: s2LastDays })
         if (!fv.length || !fvTarget.length) return null
@@ -456,6 +536,7 @@ export async function findSimilarStocks(input: {
           symbol: code,
           name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
           score: sim,
+          s4Matches: enabled.has(4) ? s4.matches : undefined,
         } satisfies SimilarStock
       }
 
@@ -464,11 +545,13 @@ export async function findSimilarStocks(input: {
         symbol: code,
         name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
         score: clamp01(cap / Math.max(1, capLimitYuan)),
+        s4Matches: enabled.has(4) ? s4.matches : undefined,
       } satisfies SimilarStock
     } catch {
       return null
     }
-  })
+    },
+  )
 
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
   return { target, candidates: candidates.length, top: scored.slice(0, top), meta: { window } }

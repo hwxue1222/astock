@@ -662,7 +662,7 @@ router.get(
     const enabled = enabledRaw
       .split(',')
       .map((x) => Number(String(x).trim()))
-      .filter((x): x is 1 | 2 | 3 => x === 1 || x === 2 || x === 3)
+      .filter((x): x is 1 | 2 | 3 | 4 => x === 1 || x === 2 || x === 3 || x === 4)
     const enabledUniq = Array.from(new Set(enabled))
 
     const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
@@ -673,6 +673,7 @@ router.get(
     const s3LastDays = Number(req.query.s3LastDays ?? 5)
     const s3ChangePct = Number(req.query.s3ChangePct ?? 9.98)
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
+    const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
 
     const candRaw = String(req.query.candidates ?? '').trim()
     const candidates = candRaw
@@ -700,6 +701,7 @@ router.get(
         s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
         s3ChangePct: Number.isFinite(s3ChangePct) ? s3ChangePct : 9.98,
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
+        s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
     } catch (e: unknown) {

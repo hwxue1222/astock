@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import KlineChart from '@/components/KlineChart'
 import { formatIsoToLocal, formatYiFromYuan } from '@/lib/format'
+import { detectKlineStrongPatterns } from '@/lib/klinePatterns'
 import { getKline } from '@/lib/stockApi'
+import { cn } from '@/lib/utils'
 import type { KlineFqt, KlineKlt, StockKlineResponse } from '@/types/stock'
 
 function formatTurnover(turnover: number | undefined): string {
@@ -66,6 +68,10 @@ export default function KlinePanel(props: {
     }
   }, [data?.candles])
 
+  const strongPatterns = useMemo(() => {
+    return data?.candles?.length ? detectKlineStrongPatterns(data.candles) : []
+  }, [data?.candles])
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -115,6 +121,33 @@ export default function KlinePanel(props: {
         ) : data?.candles?.length ? (
           <>
             <KlineChart candles={data.candles} />
+            {strongPatterns.length ? (
+              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-slate-200">强势形态（自动识别）</div>
+                  <div className="text-[11px] text-slate-500">仅供参考</div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {strongPatterns.map((p) => (
+                    <span
+                      key={p.id}
+                      title={`${p.reason} · 置信度 ${(p.score * 100).toFixed(0)}%`}
+                      className={cn(
+                        'inline-flex items-center rounded-lg border px-2 py-1 text-[11px] font-semibold',
+                        p.score >= 0.8
+                          ? 'border-amber-700 bg-amber-950/40 text-amber-200'
+                          : p.score >= 0.7
+                            ? 'border-sky-700 bg-sky-950/40 text-sky-200'
+                            : 'border-slate-800 bg-slate-900 text-slate-200',
+                      )}
+                    >
+                      {p.name}
+                      <span className="ml-1 text-[10px] opacity-70">{(p.score * 100).toFixed(0)}%</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {latest ? (
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-400">
                 <div>
