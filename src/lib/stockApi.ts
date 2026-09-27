@@ -153,6 +153,7 @@ export async function getSimilarStocks(
     top: number
     klt: KlineKlt
     fqt: KlineFqt
+    anchorDate?: string
     enabled?: Array<1 | 2 | 3 | 4>
     s1MaxMarketCapYi?: number
     s2LastDays?: number
@@ -172,6 +173,7 @@ export async function getSimilarStocks(
   q.set('top', String(input.top))
   q.set('klt', input.klt)
   q.set('fqt', input.fqt)
+  if (typeof input.anchorDate === 'string' && input.anchorDate) q.set('anchorDate', input.anchorDate)
   if (input.enabled?.length) q.set('enabled', input.enabled.join(','))
   if (typeof input.s1MaxMarketCapYi === 'number') q.set('s1MaxMarketCapYi', String(input.s1MaxMarketCapYi))
   if (typeof input.s2LastDays === 'number') q.set('s2LastDays', String(input.s2LastDays))

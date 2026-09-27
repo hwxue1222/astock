@@ -675,6 +675,9 @@ router.get(
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
 
+    const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
+    const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
+
     const candRaw = String(req.query.candidates ?? '').trim()
     const candidates = candRaw
       ? candRaw
@@ -690,6 +693,7 @@ router.get(
         fqt,
         days: Number.isFinite(days) ? days : 160,
         top: Number.isFinite(top) ? top : 10,
+        anchorDate,
         candidateSymbols: candidates,
         maxCandidates: Number.isFinite(maxCandidates) ? maxCandidates : 60,
         enabled: enabledUniq.length ? enabledUniq : [2],

@@ -21,6 +21,8 @@ export default function SimilarStocksPanel(props: {
   const standardSymbol = useStockStore((s) => s.standardSymbol)
   const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
   const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
+  const similarAnchorDate = useStockStore((s) => s.similarAnchorDate)
+  const setSimilarAnchorDate = useStockStore((s) => s.setSimilarAnchorDate)
   const similarLast = useStockStore((s) => s.similarLast)
   const setSimilarLast = useStockStore((s) => s.setSimilarLast)
 
@@ -34,6 +36,7 @@ export default function SimilarStocksPanel(props: {
 
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
   const compareSymbol = standardSymbol ?? props.targetSymbol
+  const anchorDate = similarAnchorDate
 
   const data: SimilarStocksResponse | null = similarLast?.data ?? null
   const [loading, setLoading] = useState(false)
@@ -55,6 +58,7 @@ export default function SimilarStocksPanel(props: {
       top: 10,
       klt: props.klt,
       fqt: props.fqt,
+      anchorDate: anchorDate ?? undefined,
       enabled,
       s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
       s2LastDays: standards.s2.lastDays,
@@ -66,7 +70,7 @@ export default function SimilarStocksPanel(props: {
     }
 
     return JSON.stringify({ symbol: compareSymbol, input })
-  }, [compareSymbol, props.days, props.fqt, props.klt, standards])
+  }, [anchorDate, compareSymbol, props.days, props.fqt, props.klt, standards])
 
   useEffect(() => {
     if (!request) return
@@ -163,6 +167,24 @@ export default function SimilarStocksPanel(props: {
             清除
           </button>
           <div className="text-xs font-semibold text-slate-100">{compareSymbol}</div>
+
+          <div className="ml-2 text-xs text-slate-400">对比时间</div>
+          <input
+            type="date"
+            value={similarAnchorDate ?? ''}
+            onChange={(e) => setSimilarAnchorDate(e.target.value || null)}
+            className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <button
+            type="button"
+            onClick={() => setSimilarAnchorDate(null)}
+            className={cn(
+              'rounded-lg border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800',
+              !similarAnchorDate ? 'opacity-40 hover:bg-slate-900' : '',
+            )}
+          >
+            最新
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -316,6 +338,7 @@ export default function SimilarStocksPanel(props: {
               top: 10,
               klt: props.klt,
               fqt: props.fqt,
+              anchorDate: anchorDate ?? undefined,
               enabled,
               s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
               s2LastDays: standards.s2.lastDays,

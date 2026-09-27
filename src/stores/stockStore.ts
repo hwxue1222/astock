@@ -7,6 +7,7 @@ type RatiosAsOf = 'latest' | 'previous'
 interface StockState {
   selectedSymbol: string | null
   standardSymbol: string | null
+  similarAnchorDate: string | null
   watchlist: string[]
   blacklist: string[]
   rangeDays: number
@@ -26,6 +27,7 @@ interface StockState {
   similarLast: { key: string; data: SimilarStocksResponse; atISO: string } | null
   thsClassicParsedByUrl: Record<string, { codes: string[]; atISO: string }>
   phaseOverrides: Record<string, string>
+  setSimilarAnchorDate: (date: string | null) => void
   setSelectedSymbol: (symbol: string) => void
   setStandardSymbol: (symbol: string) => void
   clearStandardSymbol: () => void
@@ -76,6 +78,7 @@ export const useStockStore = create<StockState>()(
     (set, get) => ({
       selectedSymbol: null,
       standardSymbol: '002829',
+      similarAnchorDate: null,
       watchlist: ['600519', '000001', '300750', '688790', '688561', '601222', '600035', '600479', '600278', '600095', '603587', '603100', '688365', '688716', '688095', '603822', '688269', '605277', '600999', '601162', '605339', '603559', '688680', '603600', '600133', '688798', '688209', '601515', '600621'],
       blacklist: [],
       rangeDays: 30,
@@ -100,6 +103,11 @@ export const useStockStore = create<StockState>()(
         cash_over_market_cap: false,
       },
       expandedSignalIds: {},
+      setSimilarAnchorDate: (date) => {
+        const raw = typeof date === 'string' ? date.trim() : ''
+        const v = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null
+        set({ similarAnchorDate: v })
+      },
       setSelectedSymbol: (symbol) => {
         set({ selectedSymbol: symbol.toUpperCase() })
       },
@@ -228,10 +236,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 16,
+      version: 17,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 16) return persisted
+        if (version >= 17) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -246,10 +254,16 @@ export const useStockStore = create<StockState>()(
         const selectedSymbol = selectedSymbolRaw && isAshareCode(selectedSymbolRaw) ? selectedSymbolRaw : null
         const standardSymbolRaw = p.standardSymbol ? String(p.standardSymbol).toUpperCase() : null
         const standardSymbol = standardSymbolRaw && isAshareCode(standardSymbolRaw) ? standardSymbolRaw : '002829'
+        const similarAnchorDateRaw = (p as { similarAnchorDate?: unknown }).similarAnchorDate
+        const similarAnchorDate =
+          typeof similarAnchorDateRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(similarAnchorDateRaw.trim())
+            ? similarAnchorDateRaw.trim()
+            : null
         return {
           ...p,
           selectedSymbol,
           standardSymbol,
+          similarAnchorDate,
           watchlist: watchlist.length ? watchlist : ['600519', '000001', '300750', '688790', '688561', '601222', '600035', '600479', '600278', '600095', '603587', '603100', '688365', '688716', '688095', '603822', '688269', '605277', '600999', '601162', '605339', '603559', '688680', '603600', '600133', '688798', '688209', '601515', '600621'],
           blacklist,
           klineKlt: '101',
