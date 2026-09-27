@@ -30,6 +30,14 @@ type GalaxyBridgeCodesResp = {
   items?: Array<{ code?: string; name?: string }>
 }
 
+type GalaxyBridgeStateOwnedResp = {
+  items?: Array<{
+    code?: string
+    isStateOwned?: boolean
+    evidence?: string[]
+  }>
+}
+
 async function fetchGalaxyBridgeCodes(input: { limit: number; timeoutMs?: number }): Promise<UniverseEntry[]> {
   const base = (process.env.GALAXY_BRIDGE_URL ?? '').trim()
   if (!base) return []
@@ -49,6 +57,48 @@ async function fetchGalaxyBridgeCodes(input: { limit: number; timeoutMs?: number
   } catch {
     return []
   }
+}
+
+async function fetchGalaxyBridgeStateOwned(input: {
+  codes: string[]
+  timeoutMs?: number
+}): Promise<Map<string, { isStateOwned: boolean; evidence: string[] }>> {
+  const base = (process.env.GALAXY_BRIDGE_URL ?? '').trim()
+  if (!base) return new Map()
+  const uniq = Array.from(new Set(input.codes.map((x) => String(x ?? '').trim()).filter((x) => /^\d{6}$/.test(x))))
+  if (!uniq.length) return new Map()
+
+  const chunkSize = 200
+  const chunks: string[][] = []
+  for (let i = 0; i < uniq.length; i += chunkSize) chunks.push(uniq.slice(i, i + chunkSize))
+
+  const out = new Map<string, { isStateOwned: boolean; evidence: string[] }>()
+
+  for (const chunk of chunks) {
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), input.timeoutMs ?? 18_000)
+      const resp = await fetch(
+        `${base.replace(/\/$/, '')}/stateowned?codes=${encodeURIComponent(chunk.join(','))}`,
+        { signal: ctrl.signal },
+      )
+      clearTimeout(t)
+      if (!resp.ok) continue
+      const data = (await resp.json()) as GalaxyBridgeStateOwnedResp
+      for (const it of data.items ?? []) {
+        const code = String(it.code ?? '').trim()
+        if (!/^\d{6}$/.test(code)) continue
+        out.set(code, {
+          isStateOwned: Boolean(it.isStateOwned),
+          evidence: Array.isArray(it.evidence) ? it.evidence.map((x) => String(x)) : [],
+        })
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return out
 }
 
 function clamp01(n: number): number {
@@ -316,7 +366,7 @@ export async function findSimilarStocks(input: {
   anchorDate?: string
   candidateSymbols?: string[]
   maxCandidates?: number
-  enabled: Array<1 | 2 | 3 | 4 | 5>
+  enabled: Array<1 | 2 | 3 | 4 | 5 | 6>
   s1MaxMarketCapYi: number
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
@@ -420,6 +470,20 @@ export async function findSimilarStocks(input: {
     })
   }
 
+  if (enabled.has(6)) {
+    const stateMap = await fetchGalaxyBridgeStateOwned({
+      codes: candidates,
+      timeoutMs: 18_000,
+    })
+    if (stateMap.size) {
+      const stateSet = new Set<string>()
+      for (const [code, v] of stateMap.entries()) {
+        if (v.isStateOwned) stateSet.add(code)
+      }
+      candidates = candidates.filter((c) => stateSet.has(c))
+    }
+  }
+
   if (enabled.size === 1 && enabled.has(1)) {
     const out = candidates
       .map((c) => {
@@ -431,6 +495,17 @@ export async function findSimilarStocks(input: {
         } satisfies SimilarStock
       })
       .sort((a, b) => b.score - a.score)
+      .slice(0, top)
+    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+  }
+
+  if (enabled.size === 1 && enabled.has(6)) {
+    const out = candidates
+      .map((c) => ({
+        symbol: c,
+        name: typeof nameByCode.get(c) === 'string' ? String(nameByCode.get(c)) : undefined,
+        score: 1,
+      }) satisfies SimilarStock)
       .slice(0, top)
     return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
   }

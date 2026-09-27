@@ -154,7 +154,7 @@ export async function getSimilarStocks(
     klt: KlineKlt
     fqt: KlineFqt
     anchorDate?: string
-    enabled?: Array<1 | 2 | 3 | 4 | 5>
+    enabled?: Array<1 | 2 | 3 | 4 | 5 | 6>
     s1MaxMarketCapYi?: number
     s2LastDays?: number
     s2TurnoverSpikeMultiple?: number

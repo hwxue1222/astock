@@ -46,13 +46,14 @@ export default function SimilarStocksPanel(props: {
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const currentPlannedKey = useMemo(() => {
-    const enabled: Array<1 | 2 | 3 | 4 | 5> = [
+    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
       standards.s4.enabled ? 4 : null,
       standards.s5.enabled ? 5 : null,
-    ].filter((x): x is 1 | 2 | 3 | 4 | 5 => x !== null)
+      standards.s6.enabled ? 6 : null,
+    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -330,6 +331,18 @@ export default function SimilarStocksPanel(props: {
             标准5
           </label>
           <div className="text-xs text-slate-400">揉搓线（近15日内出现）</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s6.enabled}
+              onChange={(e) => setStandard('s6', { enabled: e.target.checked })}
+            />
+            标准6
+          </label>
+          <div className="text-xs text-slate-400">股东/实控：国资/政府/国务院/部委</div>
         </div>
       </div>
 

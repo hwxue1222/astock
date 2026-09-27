@@ -100,6 +100,133 @@ def fetch_codes(limit: int):
     return rows
 
 
+_STATE_KEYWORDS = [
+    '国务院',
+    '国资委',
+    '国有资产',
+    '国有资本',
+    '人民政府',
+    '省政府',
+    '市政府',
+    '县政府',
+    '财政部',
+    '财政厅',
+    '财政局',
+    '中央汇金',
+    '中国投资有限责任公司',
+    '国开',
+    '部',
+    '委员会',
+]
+
+
+def _is_state_entity(name: str) -> bool:
+    s = (name or '').strip()
+    if not s:
+        return False
+    for kw in _STATE_KEYWORDS:
+        if kw in s:
+            return True
+    return False
+
+
+def _normalize_code(code6: str) -> str:
+    if code6.startswith('6'):
+        return f'{code6}.SH'
+    if code6.startswith(('0', '3')):
+        return f'{code6}.SZ'
+    return f'{code6}.BJ'
+
+
+def fetch_stateowned(codes, topn: int = 10):
+    ad = get_ad()
+    info = ad.InfoData()
+
+    uniq = []
+    seen = set()
+    for c in codes:
+        code6 = str(c or '').strip().split('.')[0]
+        if len(code6) != 6 or not code6.isdigit():
+            continue
+        if code6 in seen:
+            continue
+        seen.add(code6)
+        uniq.append(code6)
+
+    items = []
+    for code6 in uniq:
+        full = _normalize_code(code6)
+        top_holder = ''
+        controller = ''
+        controller_type = ''
+
+        evidence = []
+
+        try:
+            raw = info.get_share_holder(code_list=[full])
+            df = raw.get(full) if isinstance(raw, dict) else raw
+            if df is not None and len(df):
+                cols = list(getattr(df, 'columns', []) or [])
+                name_col = None
+                for c in cols:
+                    sc = str(c)
+                    if ('股东' in sc and '名' in sc) or 'holder' in sc.lower() and 'name' in sc.lower():
+                        name_col = c
+                        break
+                if name_col is None:
+                    for c in cols:
+                        sc = str(c)
+                        if 'name' in sc.lower() or '名称' in sc:
+                            name_col = c
+                            break
+                if name_col is not None:
+                    top_holder = str(df.iloc[0][name_col] or '').strip()
+        except Exception:
+            pass
+
+        try:
+            raw2 = info.get_stock_basic(code_list=[full])
+            df2 = raw2.get(full) if isinstance(raw2, dict) else raw2
+            if df2 is not None and len(df2):
+                row = df2.iloc[0]
+                cols2 = list(getattr(df2, 'columns', []) or [])
+                for c in cols2:
+                    sc = str(c)
+                    if '实际控制人类型' in sc or 'controller_type' in sc.lower():
+                        controller_type = str(row[c] or '').strip()
+                    if '实际控制人' in sc or 'controller' in sc.lower():
+                        controller = str(row[c] or '').strip()
+        except Exception:
+            pass
+
+        sh_ok = _is_state_entity(top_holder)
+        ctrl_ok = _is_state_entity(controller_type) or _is_state_entity(controller)
+
+        if top_holder:
+            evidence.append(f'top_holder:{top_holder}')
+        if controller_type:
+            evidence.append(f'controller_type:{controller_type}')
+        if controller:
+            evidence.append(f'controller:{controller}')
+
+        ok = False
+        if sh_ok and ctrl_ok:
+            ok = True
+        elif sh_ok and not controller and not controller_type:
+            ok = True
+
+        items.append({
+            'code': code6,
+            'isStateOwned': bool(ok),
+            'topShareholder': top_holder or None,
+            'controllerType': controller_type or None,
+            'controller': controller or None,
+            'evidence': evidence,
+        })
+
+    return items
+
+
 import pandas as pd  # noqa: E402  (银河SDK依赖)
 
 
@@ -130,6 +257,25 @@ class Handler(BaseHTTPRequestHandler):
             limit = int(qs.get('limit', ['5000'])[0] or 5000)
             try:
                 items = fetch_codes(min(limit, 7000))
+                self._json({'items': items, 'source': 'galaxy_ad'})
+            except Exception as e:
+                self._json({'error': str(e), 'items': []}, 502)
+            return
+        if parsed.path == '/stateowned':
+            qs = parse_qs(parsed.query)
+            codes_raw = (qs.get('codes', [''])[0] or '').strip()
+            one = (qs.get('code', [''])[0] or '').strip()
+            topn = int(qs.get('top', ['10'])[0] or 10)
+            codes = []
+            if codes_raw:
+                codes = [x.strip() for x in codes_raw.split(',') if x.strip()]
+            elif one:
+                codes = [one]
+            if not codes:
+                self._json({'error': 'missing codes', 'items': []}, 400)
+                return
+            try:
+                items = fetch_stateowned(codes[:800], topn=min(max(topn, 1), 20))
                 self._json({'items': items, 'source': 'galaxy_ad'})
             except Exception as e:
                 self._json({'error': str(e), 'items': []}, 502)
