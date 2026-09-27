@@ -2,7 +2,7 @@ import { getEastmoneyKline } from '../providers/eastmoneyKline.js'
 import { getEastmoneyClist } from '../providers/eastmoneyClist.js'
 import { getSinaSpotDataset } from '../providers/ashareSinaSpot.js'
 import { getTencentKline } from '../providers/tencentKline.js'
-import { detectStrongPatterns } from './klineStrongPatterns.js'
+import { detectKlinePatterns } from './klineStrongPatterns.js'
 
 type Candle = {
   ts: string
@@ -17,7 +17,7 @@ export type SimilarStock = {
   symbol: string
   name: string | undefined
   score: number
-  s4Matches?: Array<{ id: string; name: string }>
+  s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
 }
 
 type UniverseEntry = {
@@ -375,21 +375,26 @@ export async function findSimilarStocks(input: {
 
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandles, lastDays: s2LastDays }) : []
 
-  const targetPatternHits = enabled.has(4) ? detectStrongPatterns(targetCandles) : []
+  const targetPatternHits = enabled.has(4) ? detectKlinePatterns(targetCandles) : []
   const targetPatternIds = enabled.has(4) ? new Set(targetPatternHits.map((x) => x.id)) : new Set<string>()
 
   const passStd4 = (
     candles: Candle[],
-  ): { ok: boolean; overlap: number; ratio: number; matches: Array<{ id: string; name: string }> } => {
+  ): {
+    ok: boolean
+    overlap: number
+    ratio: number
+    matches: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
+  } => {
     if (!enabled.has(4)) return { ok: true, overlap: 0, ratio: 0, matches: [] }
     if (!targetPatternIds.size) return { ok: false, overlap: 0, ratio: 0, matches: [] }
-    const cand = detectStrongPatterns(candles)
+    const cand = detectKlinePatterns(candles)
     if (!cand.length) return { ok: false, overlap: 0, ratio: 0, matches: [] }
 
     const matches = cand
       .filter((x) => targetPatternIds.has(x.id))
       .sort((a, b) => b.score - a.score)
-      .map((x) => ({ id: x.id, name: x.name }))
+      .map((x) => ({ id: x.id, name: x.name, kind: x.kind }))
     const overlap = matches.length
     const ratio = overlap / Math.max(1, targetPatternIds.size)
     return { ok: overlap >= s4MinOverlap, overlap, ratio, matches }

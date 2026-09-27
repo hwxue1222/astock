@@ -350,7 +350,10 @@ export default function SimilarStocksPanel(props: {
               const industryName = industryBySymbol[symUpper]
               const inflowWan = industryName ? industryFlowMap.get(industryName) : undefined
               const isPositive = inflowWan !== undefined ? inflowWan >= 0 : null
-              const patternMatches = (it.s4Matches ?? []).map((x) => x.name).filter(Boolean)
+              const patternHits = (it.s4Matches ?? []).filter((x) => x && x.name)
+              const patternTitle = patternHits
+                .map((x) => (x.kind === 'strong' ? `强势:${x.name}` : x.kind === 'reversal' ? `反转:${x.name}` : `震荡待涨:${x.name}`))
+                .join('、')
 
               return (
                 <div
@@ -387,23 +390,30 @@ export default function SimilarStocksPanel(props: {
                         </span>
                       ) : null}
                     </div>
-                    {patternMatches.length ? (
+                    {patternHits.length ? (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {patternMatches.slice(0, 4).map((n) => (
+                        {patternHits.slice(0, 6).map((hit) => (
                           <span
-                            key={n}
-                            className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-200"
-                            title={patternMatches.join('、')}
+                            key={`${hit.kind}:${hit.id}`}
+                            className={cn(
+                              'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold',
+                              hit.kind === 'strong'
+                                ? 'border-red-800 bg-red-950 text-red-200'
+                                : hit.kind === 'reversal'
+                                  ? 'border-amber-800 bg-amber-950 text-amber-200'
+                                  : 'border-sky-800 bg-sky-950 text-sky-200',
+                            )}
+                            title={patternTitle}
                           >
-                            {n}
+                            {hit.name}
                           </span>
                         ))}
-                        {patternMatches.length > 4 ? (
+                        {patternHits.length > 6 ? (
                           <span
                             className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-400"
-                            title={patternMatches.join('、')}
+                            title={patternTitle}
                           >
-                            +{patternMatches.length - 4}
+                            +{patternHits.length - 6}
                           </span>
                         ) : null}
                       </div>

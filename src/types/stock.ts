@@ -105,7 +105,7 @@ export interface SimilarStockItem {
   symbol: string
   name: string | undefined
   score: number
-  s4Matches?: Array<{ id: string; name: string }>
+  s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
 }
 
 export interface SimilarStocksResponse {
