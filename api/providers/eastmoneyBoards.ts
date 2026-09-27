@@ -15,6 +15,7 @@ export type EastmoneyBoardConstituent = {
   symbol: string
   name?: string
   marketCapYuan?: number
+  changePct?: number
 }
 
 function normalizeBk(code: string): string {
@@ -89,7 +90,7 @@ export async function getEastmoneyBoardConstituents(input: {
   q.set('invt', '2')
   q.set('fid', 'f20')
   q.set('fs', `b:${board}`)
-  q.set('fields', 'f12,f14,f20')
+  q.set('fields', 'f12,f14,f20,f3')
   q.set('ut', 'bd1d9ddb04089700cf9c27f6f7426281')
   const url = `https://push2.eastmoney.com/api/qt/clist/get?${q.toString()}`
 
@@ -104,7 +105,13 @@ export async function getEastmoneyBoardConstituents(input: {
     if (!/^\d{6}$/.test(symbol)) continue
     const name = typeof it.f14 === 'string' ? it.f14.trim() : undefined
     const mc = Number(it.f20)
-    out.push({ symbol, name, marketCapYuan: Number.isFinite(mc) ? mc : undefined })
+    const changePct = Number(it.f3)
+    out.push({
+      symbol,
+      name,
+      marketCapYuan: Number.isFinite(mc) ? mc : undefined,
+      changePct: Number.isFinite(changePct) ? changePct : undefined,
+    })
   }
   out.sort((a, b) => (b.marketCapYuan ?? 0) - (a.marketCapYuan ?? 0))
   return out.slice(0, Math.max(1, Math.min(200, input.top)))
