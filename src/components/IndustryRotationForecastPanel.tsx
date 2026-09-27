@@ -107,6 +107,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
         <button
           type="button"
           disabled={loading}
+          title={monthsText}
           onClick={() => {
             const ac = new AbortController()
             setLoading(true)
@@ -144,7 +145,7 @@ export default function IndustryRotationForecastPanel(): JSX.Element {
           }}
           className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-white disabled:opacity-60"
         >
-          预测{monthsText}
+          预测
         </button>
       </div>
 
