@@ -284,7 +284,7 @@ export default function SimilarStocksPanel(props: {
             />
             标准4
           </label>
-          <div className="text-xs text-slate-400">33种强势形态交集 ≥</div>
+          <div className="text-xs text-slate-400">形态交集(强势/反转/震荡待涨) ≥</div>
           <input
             inputMode="numeric"
             value={String(standards.s4.minOverlap)}
