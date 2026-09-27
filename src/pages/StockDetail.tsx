@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import EventsFeed from '@/components/EventsFeed'
 import KlinePanel from '@/components/KlinePanel'
 import RatiosPanel from '@/components/RatiosPanel'
@@ -71,8 +71,34 @@ function PhaseTag(props: {
 
 export default function StockDetail() {
   const navigate = useNavigate()
+  const location = useLocation()
   const params = useParams()
   const routeSymbol = String(params.symbol ?? '').toUpperCase()
+
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const navMode = String(searchParams.get('nav') ?? '').trim().toLowerCase()
+  const navBoardCode = String(searchParams.get('boardCode') ?? '').trim().toUpperCase()
+  const navBoardType = (searchParams.get('boardType') === 'theme' ? 'theme' : 'concept') as 'concept' | 'theme'
+  const navDays = Number(searchParams.get('days') ?? 14)
+  const navTop = Number(searchParams.get('top') ?? 20)
+
+  const boardNavKey = useMemo(() => {
+    return /^BK\d{4}$/.test(navBoardCode) ? `board_nav:${navBoardCode}` : null
+  }, [navBoardCode])
+
+  const boardNavSymbols = useMemo(() => {
+    if (navMode !== 'board') return []
+    if (!boardNavKey) return []
+    try {
+      const raw = window.localStorage.getItem(boardNavKey)
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as { symbols?: unknown }
+      const symbols = Array.isArray(parsed?.symbols) ? parsed.symbols : []
+      return symbols.map((x) => String(x).toUpperCase()).filter((x) => /^\d{6}$/.test(x))
+    } catch {
+      return []
+    }
+  }, [boardNavKey, navMode])
 
   const selectedSymbol = useStockStore((s) => s.selectedSymbol)
   const watchlist = useStockStore((s) => s.watchlist)
@@ -282,6 +308,29 @@ export default function StockDetail() {
     return blacklist.map((x) => x.toUpperCase()).includes(s)
   }, [blacklist, routeSymbol])
 
+  const boardNavIndex = useMemo(() => {
+    if (!boardNavSymbols.length || !routeSymbol) return -1
+    return boardNavSymbols.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
+  }, [boardNavSymbols, routeSymbol])
+
+  const boardHasPrev = boardNavIndex > 0
+  const boardHasNext = boardNavIndex >= 0 && boardNavIndex < boardNavSymbols.length - 1
+  const boardPrevSymbol = boardHasPrev ? boardNavSymbols[boardNavIndex - 1] : null
+  const boardNextSymbol = boardHasNext ? boardNavSymbols[boardNavIndex + 1] : null
+
+  const boardNavSearch = useMemo(() => {
+    if (navMode !== 'board') return ''
+    const q = new URLSearchParams()
+    if (/^BK\d{4}$/.test(navBoardCode)) q.set('boardCode', navBoardCode)
+    q.set('nav', 'board')
+    q.set('boardType', navBoardType)
+    if (Number.isFinite(navDays)) q.set('days', String(navDays))
+    if (Number.isFinite(navTop)) q.set('top', String(navTop))
+    return q.toString()
+  }, [navBoardCode, navBoardType, navDays, navMode, navTop])
+
+  const useBoardNav = navMode === 'board' && boardNavIndex >= 0
+
   // 自选股翻页索引（基于快照，不受实时取消自选影响）
   const snapshot = watchlistSnapshotRef.current
   const watchlistIndex = useMemo(() => {
@@ -302,10 +351,24 @@ export default function StockDetail() {
         selectedSymbol={routeSymbol}
         onSelectSymbol={(s) => {
           setHighlightEventId(null)
+          if (useBoardNav && boardNavSearch) {
+            navigate(`/stocks/${encodeURIComponent(s)}?${boardNavSearch}`)
+            return
+          }
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
-        onBack={() => navigate('/', { state: { activeTab: 'watchlist' } })}
+        onBack={() => {
+          if (useBoardNav && /^BK\d{4}$/.test(navBoardCode)) {
+            const backQs = new URLSearchParams()
+            backQs.set('boardType', navBoardType)
+            if (Number.isFinite(navDays)) backQs.set('days', String(navDays))
+            if (Number.isFinite(navTop)) backQs.set('top', String(navTop))
+            navigate(`/concept-flow/${encodeURIComponent(navBoardCode)}?${backQs.toString()}`)
+            return
+          }
+          navigate('/', { state: { activeTab: 'watchlist' } })
+        }}
         onOpenDetail={null}
       />
 
@@ -350,8 +413,46 @@ export default function StockDetail() {
               <div className="mt-1 text-xs text-slate-500">事件时间线 · 信号解释 · 财务比率口径</div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* 自选股翻页按钮 */}
-              {watchlistIndex >= 0 ? (
+              {useBoardNav ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!boardHasPrev}
+                    onClick={() => {
+                      if (boardPrevSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(boardPrevSymbol)}?${boardNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      boardHasPrev
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    上一只
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!boardHasNext}
+                    onClick={() => {
+                      if (boardNextSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(boardNextSymbol)}?${boardNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      boardHasNext
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    下一只
+                  </button>
+                </>
+              ) : watchlistIndex >= 0 ? (
                 <>
                   <button
                     type="button"

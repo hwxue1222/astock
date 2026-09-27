@@ -53,7 +53,12 @@ export default function ConceptFlowDetail(): JSX.Element {
   const boardCode = String(rawBoardCode ?? '').trim()
   const boardType = (sp.get('boardType') === 'theme' ? 'theme' : 'concept') as 'concept' | 'theme'
   const days = clampInt(sp.get('days'), 3, 60, 14)
+  const top = clampInt(sp.get('top'), 1, 200, 20)
   const stateName = (location.state as { boardName?: string } | null)?.boardName
+
+  const boardNavStorageKey = useMemo(() => {
+    return /^BK\d{4}$/.test(boardCode) ? `board_nav:${boardCode}` : null
+  }, [boardCode])
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -266,7 +271,27 @@ export default function ConceptFlowDetail(): JSX.Element {
                     <div key={it.symbol} className="grid grid-cols-12 items-center gap-2 px-3 py-2 text-xs">
                       <button
                         type="button"
-                        onClick={() => navigate(`/stocks/${encodeURIComponent(code)}`)}
+                        onClick={() => {
+                          if (boardNavStorageKey) {
+                            try {
+                              const symbols = sorted.map((x) => normalizeCode(x.symbol)).filter((x) => /^\d{6}$/.test(x))
+                              window.localStorage.setItem(
+                                boardNavStorageKey,
+                                JSON.stringify({ ts: Date.now(), boardCode, boardType, days, top, symbols }),
+                              )
+                            } catch {
+                              void 0
+                            }
+                          }
+
+                          const qs = new URLSearchParams()
+                          qs.set('nav', 'board')
+                          qs.set('boardCode', boardCode)
+                          qs.set('boardType', boardType)
+                          qs.set('days', String(days))
+                          qs.set('top', String(top))
+                          navigate(`/stocks/${encodeURIComponent(code)}?${qs.toString()}`)
+                        }}
                         className="col-span-2 truncate text-left font-semibold text-slate-100 hover:opacity-90"
                       >
                         {code}

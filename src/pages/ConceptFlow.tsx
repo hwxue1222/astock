@@ -23,11 +23,22 @@ export default function ConceptFlow(): JSX.Element {
 
   const boardType = (sp.get('boardType') === 'theme' ? 'theme' : 'concept') as 'concept' | 'theme'
   const days = clampInt(sp.get('days'), 3, 60, 14)
-  const top = clampInt(sp.get('top'), 5, 60, 20)
+  const top = clampInt(sp.get('top'), 1, 200, 20)
+
+  const [daysDraft, setDaysDraft] = useState(String(days))
+  const [topDraft, setTopDraft] = useState(String(top))
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<BoardFlowRollingResponse | null>(null)
+
+  useEffect(() => {
+    setDaysDraft(String(days))
+  }, [days])
+
+  useEffect(() => {
+    setTopDraft(String(top))
+  }, [top])
 
   useEffect(() => {
     const ac = new AbortController()
@@ -107,11 +118,17 @@ export default function ConceptFlow(): JSX.Element {
                 type="number"
                 min={3}
                 max={60}
-                value={days}
+                value={daysDraft}
                 onChange={(e) => {
+                  const raw = e.target.value
+                  setDaysDraft(raw)
+                  if (raw === '') return
                   const next = new URLSearchParams(sp)
-                  next.set('days', String(clampInt(e.target.value, 3, 60, 14)))
+                  next.set('days', String(clampInt(raw, 3, 60, 14)))
                   setSp(next, { replace: true })
+                }}
+                onBlur={() => {
+                  if (daysDraft.trim() === '') setDaysDraft(String(days))
                 }}
                 className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
               />
@@ -122,13 +139,19 @@ export default function ConceptFlow(): JSX.Element {
               <div className="text-xs text-slate-400">Top</div>
               <input
                 type="number"
-                min={5}
-                max={60}
-                value={top}
+                min={1}
+                max={200}
+                value={topDraft}
                 onChange={(e) => {
+                  const raw = e.target.value
+                  setTopDraft(raw)
+                  if (raw === '') return
                   const next = new URLSearchParams(sp)
-                  next.set('top', String(clampInt(e.target.value, 5, 60, 20)))
+                  next.set('top', String(clampInt(raw, 1, 200, 20)))
                   setSp(next, { replace: true })
+                }}
+                onBlur={() => {
+                  if (topDraft.trim() === '') setTopDraft(String(top))
                 }}
                 className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1.5 text-xs text-slate-200"
               />

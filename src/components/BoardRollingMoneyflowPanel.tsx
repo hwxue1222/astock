@@ -105,10 +105,10 @@ export default function BoardRollingMoneyflowPanel(): JSX.Element {
             <div className="text-xs text-slate-400">Top</div>
             <input
               type="number"
-              min={5}
-              max={60}
+              min={1}
+              max={200}
               value={top}
-              onChange={(e) => setTop(Math.max(5, Math.min(60, Number(e.target.value) || 20)))}
+              onChange={(e) => setTop(Math.max(1, Math.min(200, Number(e.target.value) || 20)))}
               className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
             />
           </div>

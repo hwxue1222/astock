@@ -83,7 +83,7 @@ export async function buildBoardFlowRolling(input?: {
 }): Promise<BoardFlowRollingResponse> {
   const boardType: 'concept' | 'theme' = input?.boardType === 'theme' ? 'theme' : 'concept'
   const days = Math.max(3, Math.min(60, Math.trunc(input?.days ?? 14)))
-  const top = Math.max(1, Math.min(60, Math.trunc(input?.top ?? 20)))
+  const top = Math.max(1, Math.min(200, Math.trunc(input?.top ?? 20)))
   const boardLimit = Math.max(30, Math.min(500, Math.trunc(input?.boardLimit ?? 200)))
   const ttlSeconds = Math.max(60, Math.min(6 * 3600, Math.trunc(input?.ttlSeconds ?? 20 * 60)))
 
