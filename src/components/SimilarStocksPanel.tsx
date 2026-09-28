@@ -355,17 +355,24 @@ export default function SimilarStocksPanel(props: {
             : '全A股'}
       </div>
 
+      {data?.meta?.s6 && data.meta.s6.applied === false ? (
+        <div className="mt-1 text-xs text-amber-300">
+          标准6未生效：{data.meta.s6.reason || 'unknown'}
+        </div>
+      ) : null}
+
       <div className="mt-3 flex items-center justify-end gap-2">
         <button
           type="button"
           onClick={() => {
-            const enabled: Array<1 | 2 | 3 | 4 | 5> = [
+            const enabled: Array<1 | 2 | 3 | 4 | 5 | 6> = [
               standards.s1.enabled ? 1 : null,
               standards.s2.enabled ? 2 : null,
               standards.s3.enabled ? 3 : null,
               standards.s4.enabled ? 4 : null,
               standards.s5.enabled ? 5 : null,
-            ].filter((x): x is 1 | 2 | 3 | 4 | 5 => x !== null)
+              standards.s6.enabled ? 6 : null,
+            ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 => x !== null)
 
             const input: SimilarInput = {
               days: props.days,

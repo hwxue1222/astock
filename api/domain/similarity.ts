@@ -380,7 +380,12 @@ export async function findSimilarStocks(input: {
   target: string
   candidates: number
   top: SimilarStock[]
-  meta: { window: number; candidatePool: 'full_market' | 'custom'; candidateSource: string }
+  meta: {
+    window: number
+    candidatePool: 'full_market' | 'custom'
+    candidateSource: string
+    s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
+  }
 }> {
   const target = normalizeAshareCode(input.targetSymbol)
   const top = Math.max(1, Math.min(50, input.top))
@@ -442,6 +447,9 @@ export async function findSimilarStocks(input: {
   let candidates: string[]
   let candidatePool: 'full_market' | 'custom'
   let candidateSource: string
+  let s6Meta:
+    | { applied: boolean; source?: string; kept?: number; reason?: string }
+    | undefined
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
     candidatePool = 'custom'
@@ -461,6 +469,13 @@ export async function findSimilarStocks(input: {
     candidateSource = out.source
   }
 
+  const buildMeta = () => ({
+    window,
+    candidatePool,
+    candidateSource,
+    ...(s6Meta ? { s6: s6Meta } : {}),
+  })
+
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target)
 
   if (enabled.has(1) && capYuanByCode.size) {
@@ -471,17 +486,33 @@ export async function findSimilarStocks(input: {
   }
 
   if (enabled.has(6)) {
+    const base = (process.env.GALAXY_BRIDGE_URL ?? '').trim()
+    if (!base) {
+      return {
+        target,
+        candidates: 0,
+        top: [],
+        meta: { ...buildMeta(), s6: { applied: false, reason: 'GALAXY_BRIDGE_URL missing' } },
+      }
+    }
     const stateMap = await fetchGalaxyBridgeStateOwned({
       codes: candidates,
       timeoutMs: 18_000,
     })
-    if (stateMap.size) {
-      const stateSet = new Set<string>()
-      for (const [code, v] of stateMap.entries()) {
-        if (v.isStateOwned) stateSet.add(code)
+    if (!stateMap.size) {
+      return {
+        target,
+        candidates: 0,
+        top: [],
+        meta: { ...buildMeta(), s6: { applied: false, source: 'galaxy_bridge', reason: 'bridge returned empty' } },
       }
-      candidates = candidates.filter((c) => stateSet.has(c))
     }
+    const stateSet = new Set<string>()
+    for (const [code, v] of stateMap.entries()) {
+      if (v.isStateOwned) stateSet.add(code)
+    }
+    candidates = candidates.filter((c) => stateSet.has(c))
+    s6Meta = { applied: true, source: 'galaxy_bridge', kept: candidates.length }
   }
 
   if (enabled.size === 1 && enabled.has(1)) {
@@ -496,7 +527,7 @@ export async function findSimilarStocks(input: {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, top)
-    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   if (enabled.size === 1 && enabled.has(6)) {
@@ -507,7 +538,23 @@ export async function findSimilarStocks(input: {
         score: 1,
       }) satisfies SimilarStock)
       .slice(0, top)
-    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+    return {
+      target,
+      candidates: candidates.length,
+      top: out,
+      meta: buildMeta(),
+    }
+  }
+
+  if (enabled.size === 1 && enabled.has(6)) {
+    const out = candidates
+      .map((c) => ({
+        symbol: c,
+        name: typeof nameByCode.get(c) === 'string' ? String(nameByCode.get(c)) : undefined,
+        score: 1,
+      }) satisfies SimilarStock)
+      .slice(0, top)
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   const targetCandles = enabled.has(2) || enabled.has(3) || enabled.has(4)
@@ -599,7 +646,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => b.ratio - a.ratio)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, s4Matches: x.s4Matches }))
-    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   if (enabled.size === 1 && enabled.has(5)) {
@@ -650,7 +697,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => b.pScore - a.pScore)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
-    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   const passStd3 = (candles: Candle[]): boolean => {
@@ -711,7 +758,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => a.idx - b.idx)
       .slice(0, top)
       .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
-    return { target, candidates: candidates.length, top: out, meta: { window, candidatePool, candidateSource } }
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   const rows = await mapLimit<string, SimilarStock | null>(
@@ -768,5 +815,5 @@ export async function findSimilarStocks(input: {
   )
 
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
-  return { target, candidates: candidates.length, top: scored.slice(0, top), meta: { window, candidatePool, candidateSource } }
+  return { target, candidates: candidates.length, top: scored.slice(0, top), meta: buildMeta() }
 }

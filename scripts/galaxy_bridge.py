@@ -102,21 +102,21 @@ def fetch_codes(limit: int):
 
 _STATE_KEYWORDS = [
     '国务院',
+    '国务院国有资产监督管理委员会',
+    '国有资产监督管理委员会',
     '国资委',
     '国有资产',
     '国有资本',
     '人民政府',
-    '省政府',
-    '市政府',
-    '县政府',
+    '省人民政府',
+    '市人民政府',
+    '县人民政府',
     '财政部',
     '财政厅',
     '财政局',
     '中央汇金',
     '中国投资有限责任公司',
-    '国开',
-    '部',
-    '委员会',
+    '国家开发银行',
 ]
 
 
@@ -209,11 +209,7 @@ def fetch_stateowned(codes, topn: int = 10):
         if controller:
             evidence.append(f'controller:{controller}')
 
-        ok = False
-        if sh_ok and ctrl_ok:
-            ok = True
-        elif sh_ok and not controller and not controller_type:
-            ok = True
+        ok = bool(sh_ok and ctrl_ok)
 
         items.append({
             'code': code6,

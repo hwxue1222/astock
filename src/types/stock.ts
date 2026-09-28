@@ -117,6 +117,7 @@ export interface SimilarStocksResponse {
     source?: string
     candidatePool?: 'full_market' | 'custom'
     candidateSource?: string
+    s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
   }
 }
 
