@@ -330,7 +330,20 @@ export default function SimilarStocksPanel(props: {
             />
             标准5
           </label>
-          <div className="text-xs text-slate-400">揉搓线（近15日内出现）</div>
+          <div className="text-xs text-slate-400">揉搓线（近</div>
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={standards.s5.lookbackDays}
+            onChange={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              setStandard('s5', { lookbackDays: Math.max(1, Math.min(60, Math.floor(n))) })
+            }}
+            className="w-[72px] rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-slate-100"
+          />
+          <div className="text-xs text-slate-400">日内出现）</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -388,6 +401,7 @@ export default function SimilarStocksPanel(props: {
               s3ChangePct: standards.s3.changePct,
               s3VolumeMultiple: standards.s3.volumeMultiple,
               s4MinOverlap: standards.s4.minOverlap,
+              s5LookbackDays: standards.s5.lookbackDays,
             }
             const key = JSON.stringify({ symbol: compareSymbol, input })
             setRequest({ symbol: compareSymbol, input, key })

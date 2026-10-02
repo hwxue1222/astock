@@ -376,6 +376,7 @@ export async function findSimilarStocks(input: {
   s3ChangePct?: number
   s3VolumeMultiple?: number
   s4MinOverlap?: number
+  s5LookbackDays?: number
 }): Promise<{
   target: string
   candidates: number
@@ -400,12 +401,13 @@ export async function findSimilarStocks(input: {
   const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
   const s4MinOverlap = Math.max(1, Math.min(10, input.s4MinOverlap ?? 1))
+  const s5LookbackDays = Math.max(1, Math.min(60, Math.floor(input.s5LookbackDays ?? 15)))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
   const baseLimit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
   const limit = enabled.has(4) ? Math.max(baseLimit, 220) : baseLimit
-  const limit2 = enabled.has(5) ? Math.max(limit, 140) : limit
+  const limit2 = enabled.has(5) ? Math.max(limit, Math.min(900, s5LookbackDays + 30)) : limit
   const fetchLimit = input.anchorDate ? Math.max(limit2, 900) : limit2
   const klineFqt = enabled.has(3) ? '0' : '1'
 
@@ -438,7 +440,7 @@ export async function findSimilarStocks(input: {
 
   const passStd5 = (candles: Candle[]): boolean => {
     if (!enabled.has(5)) return true
-    return hasPatternInLastNDays(candles, 'roucuo_line', 15)
+    return hasPatternInLastNDays(candles, 'roucuo_line', s5LookbackDays)
   }
 
   const nameByCode = new Map<string, string>()

@@ -674,6 +674,7 @@ router.get(
     const s3ChangePct = Number(req.query.s3ChangePct ?? 9.98)
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
+    const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
 
     const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
@@ -706,6 +707,7 @@ router.get(
         s3ChangePct: Number.isFinite(s3ChangePct) ? s3ChangePct : 9.98,
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
+        s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
     } catch (e: unknown) {

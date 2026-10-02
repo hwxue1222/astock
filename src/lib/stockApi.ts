@@ -164,6 +164,7 @@ export async function getSimilarStocks(
     s3VolumeMultiple?: number
     s3LastDays?: number
     s4MinOverlap?: number
+    s5LookbackDays?: number
     candidates?: string[]
   },
   signal?: AbortSignal,
@@ -185,6 +186,7 @@ export async function getSimilarStocks(
   if (typeof input.s3VolumeMultiple === 'number') q.set('s3VolumeMultiple', String(input.s3VolumeMultiple))
   if (typeof input.s3LastDays === 'number') q.set('s3LastDays', String(input.s3LastDays))
   if (typeof input.s4MinOverlap === 'number') q.set('s4MinOverlap', String(input.s4MinOverlap))
+  if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
   if (input.candidates?.length) q.set('candidates', input.candidates.join(','))
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/similar?${q.toString()}`,
