@@ -83,6 +83,19 @@ export default function StockDetail() {
   const navTop = Number(searchParams.get('top') ?? 20)
   const navSimilarSeed = String(searchParams.get('seed') ?? '').trim().toUpperCase()
 
+  const lifelineNavSymbols = useMemo(() => {
+    if (navMode !== 'lifeline') return []
+    try {
+      const raw = window.localStorage.getItem('lifeline_nav:v1')
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as { symbols?: unknown }
+      const symbols = Array.isArray(parsed?.symbols) ? parsed.symbols : []
+      return symbols.map((x) => String(x).toUpperCase()).filter((x) => /^\d{6}$/.test(x))
+    } catch {
+      return []
+    }
+  }, [navMode])
+
   const boardNavKey = useMemo(() => {
     return /^BK\d{4}$/.test(navBoardCode) ? `board_nav:${navBoardCode}` : null
   }, [navBoardCode])
@@ -338,9 +351,28 @@ export default function StockDetail() {
     return q.toString()
   }, [navMode, navSimilarSeed])
 
+  const lifelineNavSearch = useMemo(() => {
+    if (navMode !== 'lifeline') return ''
+    const q = new URLSearchParams()
+    q.set('nav', 'lifeline')
+    return q.toString()
+  }, [navMode])
+
   const inBoardContext = navMode === 'board' && /^BK\d{4}$/.test(navBoardCode)
   const inSimilarContext = navMode === 'similar'
+  const inLifelineContext = navMode === 'lifeline'
   const canBoardNav = inBoardContext && boardNavIndex >= 0
+
+  const lifelineNavIndex = useMemo(() => {
+    if (!lifelineNavSymbols.length || !routeSymbol) return -1
+    return lifelineNavSymbols.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
+  }, [lifelineNavSymbols, routeSymbol])
+
+  const lifelineHasPrev = lifelineNavIndex > 0
+  const lifelineHasNext = lifelineNavIndex >= 0 && lifelineNavIndex < lifelineNavSymbols.length - 1
+  const lifelinePrevSymbol = lifelineHasPrev ? lifelineNavSymbols[lifelineNavIndex - 1] : null
+  const lifelineNextSymbol = lifelineHasNext ? lifelineNavSymbols[lifelineNavIndex + 1] : null
+  const canLifelineNav = inLifelineContext && lifelineNavIndex >= 0
 
   // 自选股翻页索引（基于快照，不受实时取消自选影响）
   const snapshot = watchlistSnapshotRef.current
@@ -370,6 +402,10 @@ export default function StockDetail() {
             navigate(`/stocks/${encodeURIComponent(s)}?${similarNavSearch}`)
             return
           }
+          if (inLifelineContext && lifelineNavSearch) {
+            navigate(`/stocks/${encodeURIComponent(s)}?${lifelineNavSearch}`)
+            return
+          }
           navigate(`/stocks/${encodeURIComponent(s)}`)
         }}
         updatedAt={updatedAt}
@@ -384,6 +420,10 @@ export default function StockDetail() {
           }
           if (inSimilarContext) {
             navigate('/', { state: { activeTab: 'similar' } })
+            return
+          }
+          if (inLifelineContext) {
+            navigate('/', { state: { activeTab: 'lifeline' } })
             return
           }
           navigate('/', { state: { activeTab: 'watchlist' } })
@@ -464,6 +504,45 @@ export default function StockDetail() {
                     className={cn(
                       'rounded-lg border px-3 py-2 text-xs font-semibold',
                       boardHasNext
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    下一只
+                  </button>
+                </>
+              ) : canLifelineNav ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!lifelineHasPrev}
+                    onClick={() => {
+                      if (lifelinePrevSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(lifelinePrevSymbol)}?${lifelineNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      lifelineHasPrev
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    上一只
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!lifelineHasNext}
+                    onClick={() => {
+                      if (lifelineNextSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(lifelineNextSymbol)}?${lifelineNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      lifelineHasNext
                         ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
                         : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
                     )}

@@ -334,9 +334,23 @@ export default function Home() {
                           <td className="px-4 py-3">
                             <button
                               type="button"
-                              onClick={() =>
-                                navigate(`/stocks/${encodeURIComponent(s.code.split('.')[0])}`)
-                              }
+                              onClick={() => {
+                                try {
+                                  const symbols = lifelineStocks
+                                    .map((x) => String(x.code ?? '').split('.')[0].toUpperCase())
+                                    .filter((x) => /^\d{6}$/.test(x))
+                                  window.localStorage.setItem(
+                                    'lifeline_nav:v1',
+                                    JSON.stringify({ symbols, atISO: new Date().toISOString() }),
+                                  )
+                                } catch {
+                                  void 0
+                                }
+
+                                const qs = new URLSearchParams()
+                                qs.set('nav', 'lifeline')
+                                navigate(`/stocks/${encodeURIComponent(s.code.split('.')[0])}?${qs.toString()}`)
+                              }}
                               className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
                             >
                               查看详情
