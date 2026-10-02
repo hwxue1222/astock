@@ -334,12 +334,12 @@ export default function SimilarStocksPanel(props: {
           <input
             type="number"
             min={1}
-            max={60}
+            max={365}
             value={standards.s5.lookbackDays}
             onChange={(e) => {
               const n = Number(e.target.value)
               if (!Number.isFinite(n)) return
-              setStandard('s5', { lookbackDays: Math.max(1, Math.min(60, Math.floor(n))) })
+              setStandard('s5', { lookbackDays: Math.max(1, Math.min(365, Math.floor(n))) })
             }}
             className="w-[72px] rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-slate-100"
           />

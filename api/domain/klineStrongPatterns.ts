@@ -210,6 +210,74 @@ function detectRoucuoLine(candles: Candle[]): KlinePatternHit | null {
   return { id: 'roucuo_line', name: '揉搓线', kind: 'range_ready', score }
 }
 
+function hasRoucuoLineInLastNDays(candles: Candle[], lookbackDays: number): boolean {
+  const list = candles ?? []
+  const n = Math.max(1, Math.min(365, Math.floor(lookbackDays)))
+  if (!list.length) return false
+  const start = Math.max(0, list.length - n)
+
+  const closes = list.map((c) => c.close)
+  const volsAll = list.map((c) => c.volume || 0)
+  const ma20 = sma(closes, 20)
+  const vma20 = sma(volsAll, 20)
+
+  const consDays = 6
+
+  for (let i = list.length - 1; i >= start; i -= 1) {
+    if (i < 54) break
+    if (!Number.isFinite(ma20[i])) continue
+    const last = list[i]
+
+    const lastRangePct = safeDiv(candleRange(last), last.open || 1)
+    if (last.close < (ma20[i] as number)) continue
+    if (lastRangePct > 0.045) continue
+
+    const consStart = i - (consDays - 1)
+    if (consStart < 0) continue
+    const cons = list.slice(consStart, i + 1)
+    if (cons.length !== consDays) continue
+
+    const isSmallConsCandle = (c: Candle): boolean => {
+      const r = candleRange(c)
+      if (!(r > 0)) return false
+      const body = candleBody(c)
+      const rangePct = safeDiv(r, c.open || 1)
+      const bodyRatio = safeDiv(body, r)
+      return rangePct <= 0.05 && bodyRatio <= 0.55
+    }
+    if (cons.filter(isSmallConsCandle).length < 5) continue
+
+    const maxH = Math.max(...cons.map((c) => c.high))
+    const minL = Math.min(...cons.map((c) => c.low))
+    const mid = cons.reduce((a, b) => a + b.close, 0) / cons.length
+    const width = safeDiv(maxH - minL, mid || 1)
+    if (width > 0.04) continue
+
+    const v20Idx = i - consDays
+    if (v20Idx < 19 || !Number.isFinite(vma20[v20Idx])) continue
+    const v20 = vma20[v20Idx] as number
+    const lastVol = last.volume || 0
+    if (!(v20 > 0 && lastVol > 0 && lastVol <= v20 * 0.8)) continue
+
+    const vols = cons.map((c) => c.volume || 0)
+    let downStreak = 0
+    for (let k = 1; k < vols.length; k += 1) {
+      if (vols[k] <= vols[k - 1]) downStreak += 1
+    }
+    if (downStreak < 3) continue
+
+    const t = v20Idx
+    const prevClose = closes[t - 20]
+    const curClose = closes[t]
+    const priorTrend = safeDiv(curClose - prevClose, prevClose) * 100
+    if (priorTrend < 6) continue
+
+    return true
+  }
+
+  return false
+}
+
 function detectBullishEngulfing(candles: Candle[]): KlinePatternHit | null {
   if (candles.length < 2) return null
   const a = candles[candles.length - 2]
@@ -759,7 +827,8 @@ export function hasPatternInLastNDays(candles: Candle[], patternId: KlinePattern
   const list = (candles ?? []).filter((c) =>
     [c.open, c.close, c.high, c.low].every((x) => Number.isFinite(x)) && c.ts,
   )
-  const n = Math.max(1, Math.min(60, Math.floor(lookbackDays)))
+  if (patternId === 'roucuo_line') return hasRoucuoLineInLastNDays(list, lookbackDays)
+  const n = Math.max(1, Math.min(365, Math.floor(lookbackDays)))
   if (!list.length) return false
   const start = Math.max(0, list.length - n)
   for (let end = list.length - 1; end >= start; end -= 1) {

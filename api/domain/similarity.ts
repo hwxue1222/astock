@@ -401,7 +401,7 @@ export async function findSimilarStocks(input: {
   const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
   const s4MinOverlap = Math.max(1, Math.min(10, input.s4MinOverlap ?? 1))
-  const s5LookbackDays = Math.max(1, Math.min(60, Math.floor(input.s5LookbackDays ?? 15)))
+  const s5LookbackDays = Math.max(1, Math.min(365, Math.floor(input.s5LookbackDays ?? 15)))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
