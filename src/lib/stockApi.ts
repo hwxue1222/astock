@@ -195,6 +195,35 @@ export async function getSimilarStocks(
   return data
 }
 
+export async function getScreenerStocks(
+  input: {
+    top: number
+    anchorDate?: string
+    enabled?: Array<1 | 3 | 5 | 6>
+    maxCandidates?: number
+    s1MaxMarketCapYi?: number
+    s3ChangePct?: number
+    s3VolumeMultiple?: number
+    s3LastDays?: number
+    s5LookbackDays?: number
+  },
+  signal?: AbortSignal,
+): Promise<SimilarStocksResponse> {
+  const q = new URLSearchParams()
+  q.set('top', String(input.top))
+  if (typeof input.anchorDate === 'string' && input.anchorDate) q.set('anchorDate', input.anchorDate)
+  if (input.enabled?.length) q.set('enabled', input.enabled.join(','))
+  if (typeof input.maxCandidates === 'number') q.set('maxCandidates', String(input.maxCandidates))
+  if (typeof input.s1MaxMarketCapYi === 'number') q.set('s1MaxMarketCapYi', String(input.s1MaxMarketCapYi))
+  if (typeof input.s3LastDays === 'number') q.set('s3LastDays', String(input.s3LastDays))
+  if (typeof input.s3ChangePct === 'number') q.set('s3ChangePct', String(input.s3ChangePct))
+  if (typeof input.s3VolumeMultiple === 'number') q.set('s3VolumeMultiple', String(input.s3VolumeMultiple))
+  if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
+
+  const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(`/api/stocks/screener?${q.toString()}`, signal)
+  return data
+}
+
 export async function getRumors(
   symbol: string,
   input: { limit: number },

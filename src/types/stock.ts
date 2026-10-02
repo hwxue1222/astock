@@ -115,9 +115,11 @@ export interface SimilarStocksResponse {
   meta?: {
     window?: number
     source?: string
+    mode?: 'similar' | 'screener'
     candidatePool?: 'full_market' | 'custom'
     candidateSource?: string
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
+    s1?: { applied: boolean; reason?: string }
   }
 }
 

@@ -819,3 +819,195 @@ export async function findSimilarStocks(input: {
   const scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
   return { target, candidates: candidates.length, top: scored.slice(0, top), meta: buildMeta() }
 }
+
+export async function screenStocks(input: {
+  klt: '101' | '102' | '103'
+  fqt: '0' | '1' | '2'
+  top: number
+  anchorDate?: string
+  maxCandidates?: number
+  enabled: Array<1 | 3 | 5 | 6>
+  s1MaxMarketCapYi: number
+  s3LastDays?: number
+  s3ChangePct?: number
+  s3VolumeMultiple?: number
+  s5LookbackDays?: number
+}): Promise<{
+  target: string
+  candidates: number
+  top: SimilarStock[]
+  meta: {
+    window: number
+    candidatePool: 'full_market'
+    candidateSource: string
+    mode: 'screener'
+    s1?: { applied: boolean; reason?: string }
+    s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
+  }
+}> {
+  const top = Math.max(1, Math.min(50, input.top))
+  const enabled = new Set(input.enabled)
+  const window = enabled.has(3) ? Math.max(1, Math.min(10, input.s3LastDays ?? 5)) : 0
+
+  const capLimitYuan = Math.max(1, Math.min(10_000, input.s1MaxMarketCapYi)) * 100_000_000
+  const s3LastDays = Math.max(1, Math.min(10, input.s3LastDays ?? 5))
+  const s3ChangePct = Math.max(0, Math.min(30, input.s3ChangePct ?? 9.98))
+  const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
+  const s5LookbackDays = Math.max(1, Math.min(365, Math.floor(input.s5LookbackDays ?? 15)))
+
+  const anchorDate = input.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate) ? input.anchorDate : undefined
+  const anchorMs = anchorDate ? Date.parse(`${anchorDate}T23:59:59.999Z`) : undefined
+
+  const parseCandleDateMs = (ts: string): number => {
+    const raw = String(ts ?? '').trim()
+    if (!raw) return Number.NaN
+    const iso = raw.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (iso) return Date.parse(`${iso}T00:00:00Z`)
+    const ymd = raw.match(/^(\d{8})/)?.[1]
+    if (ymd) {
+      const y = ymd.slice(0, 4)
+      const m = ymd.slice(4, 6)
+      const d = ymd.slice(6, 8)
+      return Date.parse(`${y}-${m}-${d}T00:00:00Z`)
+    }
+    return Date.parse(raw)
+  }
+
+  const sliceAsOf = (candles: Candle[]): Candle[] => {
+    if (!anchorMs) return candles
+    return candles.filter((c) => {
+      const ms = parseCandleDateMs(c.ts)
+      return Number.isFinite(ms) && ms <= anchorMs
+    })
+  }
+
+  const klineFqt = enabled.has(3) ? '0' : '1'
+  const fetchLimit = anchorDate ? 900 : Math.max(180, s5LookbackDays + 30)
+
+  const nameByCode = new Map<string, string>()
+  const capYuanByCode = new Map<string, number>()
+
+  const maxCandidates = Math.max(60, Math.min(2000, input.maxCandidates ?? 600))
+  const out = await getFullMarketCandidates({
+    maxCandidates,
+    sort: 'pctchg_desc',
+    capLimitYuan,
+    applyCapLimit: enabled.has(1),
+    nameByCode,
+    capYuanByCode,
+  })
+  let candidates = out.candidates
+
+  const meta: {
+    window: number
+    candidatePool: 'full_market'
+    candidateSource: string
+    mode: 'screener'
+    s1?: { applied: boolean; reason?: string }
+    s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
+  } = {
+    window,
+    candidatePool: 'full_market',
+    candidateSource: out.source,
+    mode: 'screener',
+  }
+
+  if (enabled.has(1) && !capYuanByCode.size) {
+    meta.s1 = { applied: false, reason: 'market cap unavailable' }
+    return { target: 'SCREENER', candidates: 0, top: [], meta }
+  }
+  if (enabled.has(1) && capYuanByCode.size) {
+    candidates = candidates.filter((c) => {
+      const cap = capYuanByCode.get(c)
+      return typeof cap === 'number' ? cap <= capLimitYuan : false
+    })
+    meta.s1 = { applied: true }
+  }
+
+  if (enabled.has(6)) {
+    const base = (process.env.GALAXY_BRIDGE_URL ?? '').trim()
+    if (!base) {
+      meta.s6 = { applied: false, reason: 'GALAXY_BRIDGE_URL missing' }
+      return { target: 'SCREENER', candidates: 0, top: [], meta }
+    }
+    const stateMap = await fetchGalaxyBridgeStateOwned({ codes: candidates, timeoutMs: 18_000 })
+    if (!stateMap.size) {
+      meta.s6 = { applied: false, source: 'galaxy_bridge', reason: 'bridge returned empty' }
+      return { target: 'SCREENER', candidates: 0, top: [], meta }
+    }
+    const stateSet = new Set<string>()
+    for (const [code, v] of stateMap.entries()) {
+      if (v.isStateOwned) stateSet.add(code)
+    }
+    candidates = candidates.filter((c) => stateSet.has(c))
+    meta.s6 = { applied: true, source: 'galaxy_bridge', kept: candidates.length }
+  }
+
+  const passStd3 = (candles: Candle[]): boolean => {
+    const cs = sliceAsOf(candles)
+    const xs = cs.slice(-1 * (s3LastDays + 1))
+    if (xs.length < 2) return false
+    for (let i = 1; i < xs.length; i += 1) {
+      const prev = xs[i - 1]
+      const cur = xs[i]
+      const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
+      const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
+      if (changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple) return true
+    }
+    return false
+  }
+
+  const passStd5 = (candles: Candle[]): boolean => {
+    const cs = sliceAsOf(candles)
+    return hasPatternInLastNDays(cs, 'roucuo_line', s5LookbackDays)
+  }
+
+  const rows = await mapLimit<string, SimilarStock | null>(
+    candidates,
+    enabled.has(3) || enabled.has(5) ? 4 : 2,
+    async (code, idx) => {
+      try {
+        if (!enabled.has(3) && !enabled.has(5)) {
+          const scoreBase = 1 - idx / Math.max(1, candidates.length)
+          const cap = capYuanByCode.get(code) ?? 0
+          const capScore = enabled.has(1) ? clamp01(1 - cap / Math.max(1, capLimitYuan)) : 0
+          const score = enabled.has(1) ? clamp01(scoreBase * 0.7 + capScore * 0.3) : clamp01(scoreBase)
+          return {
+            symbol: code,
+            name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+            score,
+          } satisfies SimilarStock
+        }
+
+        const candles = await getCandlesCached({
+          code,
+          klt: '101',
+          fqt: klineFqt,
+          limit: fetchLimit,
+          ttlMs: 10 * 60 * 1000,
+          timeoutMs: 12_000,
+          fallbackToTencent: true,
+        })
+
+        if (enabled.has(5) && !passStd5(candles)) return null
+        if (enabled.has(3) && !passStd3(candles)) return null
+
+        const scoreBase = 1 - idx / Math.max(1, candidates.length)
+        const cap = capYuanByCode.get(code) ?? 0
+        const capScore = enabled.has(1) ? clamp01(1 - cap / Math.max(1, capLimitYuan)) : 0
+        const score = enabled.has(1) ? clamp01(scoreBase * 0.7 + capScore * 0.3) : clamp01(scoreBase)
+
+        return {
+          symbol: code,
+          name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+          score,
+        } satisfies SimilarStock
+      } catch {
+        return null
+      }
+    },
+  )
+
+  const picked = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
+  return { target: 'SCREENER', candidates: candidates.length, top: picked.slice(0, top), meta }
+}

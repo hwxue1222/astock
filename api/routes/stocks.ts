@@ -15,7 +15,7 @@ import {
 } from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
-import { findSimilarStocks } from '../domain/similarity.js'
+import { findSimilarStocks, screenStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getRumorsOverview } from '../domain/rumors.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
@@ -641,6 +641,53 @@ router.get(
       res.status(502).json({
         success: false,
         error: 'Kline provider unavailable (real data required)',
+        detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+      })
+    }
+  },
+)
+
+router.get(
+  '/screener',
+  async (req: Request, res: Response): Promise<void> => {
+    const top = Number(req.query.top ?? 10)
+    const maxCandidates = Number(req.query.maxCandidates ?? 600)
+
+    const enabledRaw = String(req.query.enabled ?? '1,3,5')
+    const enabled = enabledRaw
+      .split(',')
+      .map((x) => Number(String(x).trim()))
+      .filter((x): x is 1 | 3 | 5 | 6 => x === 1 || x === 3 || x === 5 || x === 6)
+    const enabledUniq = Array.from(new Set(enabled))
+
+    const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
+    const s3LastDays = Number(req.query.s3LastDays ?? 5)
+    const s3ChangePct = Number(req.query.s3ChangePct ?? 9.98)
+    const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
+    const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
+
+    const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
+    const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
+
+    try {
+      const out = await screenStocks({
+        klt: '101',
+        fqt: '1',
+        top: Number.isFinite(top) ? top : 10,
+        maxCandidates: Number.isFinite(maxCandidates) ? maxCandidates : 600,
+        anchorDate,
+        enabled: enabledUniq.length ? (enabledUniq as Array<1 | 3 | 5 | 6>) : [1, 3, 5],
+        s1MaxMarketCapYi: Number.isFinite(s1MaxMarketCapYi) ? s1MaxMarketCapYi : 150,
+        s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
+        s3ChangePct: Number.isFinite(s3ChangePct) ? s3ChangePct : 9.98,
+        s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
+        s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
+      })
+      res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'screener' } })
+    } catch (e: unknown) {
+      res.status(502).json({
+        success: false,
+        error: 'Screener unavailable (real data required)',
         detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
       })
     }

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIndustryMoneyflow, getQuotes, getSimilarStocks } from '@/lib/stockApi'
+import { getIndustryMoneyflow, getQuotes, getSimilarStocks, getScreenerStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
 
 type SimilarInput = Parameters<typeof getSimilarStocks>[1]
+type ScreenerInput = Parameters<typeof getScreenerStocks>[0]
 
 export default function SimilarStocksPanel(props: {
   targetSymbol: string
@@ -39,13 +40,39 @@ export default function SimilarStocksPanel(props: {
   const anchorDate = similarAnchorDate
 
   const data: SimilarStocksResponse | null = similarLast?.data ?? null
+  const lastMode: 'similar' | 'screener' = data?.meta?.mode ?? 'similar'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
+  const [request, setRequest] = useState<
+    | { kind: 'similar'; symbol: string; input: SimilarInput; key: string }
+    | { kind: 'screener'; input: ScreenerInput; key: string }
+    | null
+  >(null)
   const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
   const currentPlannedKey = useMemo(() => {
+    if (lastMode === 'screener') {
+      const enabled: Array<1 | 3 | 5 | 6> = [
+        standards.s1.enabled ? 1 : null,
+        standards.s3.enabled ? 3 : null,
+        standards.s5.enabled ? 5 : null,
+        standards.s6.enabled ? 6 : null,
+      ].filter((x): x is 1 | 3 | 5 | 6 => x !== null)
+
+      const input: ScreenerInput = {
+        top: 10,
+        anchorDate: anchorDate ?? undefined,
+        enabled,
+        s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
+        s3LastDays: standards.s3.lastDays,
+        s3ChangePct: standards.s3.changePct,
+        s3VolumeMultiple: standards.s3.volumeMultiple,
+        s5LookbackDays: standards.s5.lookbackDays,
+      }
+      return JSON.stringify({ kind: 'screener', input })
+    }
+
     const enabled: Array<1 | 2 | 3 | 4 | 5 | 6> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
@@ -69,10 +96,11 @@ export default function SimilarStocksPanel(props: {
       s3ChangePct: standards.s3.changePct,
       s3VolumeMultiple: standards.s3.volumeMultiple,
       s4MinOverlap: standards.s4.minOverlap,
+      s5LookbackDays: standards.s5.lookbackDays,
     }
 
-    return JSON.stringify({ symbol: compareSymbol, input })
-  }, [anchorDate, compareSymbol, props.days, props.fqt, props.klt, standards])
+    return JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
+  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, standards])
 
   useEffect(() => {
     if (!request) return
@@ -80,7 +108,12 @@ export default function SimilarStocksPanel(props: {
     setLoading(true)
     setError(null)
 
-    getSimilarStocks(request.symbol, request.input, ac.signal)
+    const run =
+      request.kind === 'similar'
+        ? getSimilarStocks(request.symbol, request.input, ac.signal)
+        : getScreenerStocks(request.input, ac.signal)
+
+    run
       .then((d) => {
         if (ac.signal.aborted) return
         setSimilarLast({ key: request.key, data: d, atISO: new Date().toISOString() })
@@ -403,12 +436,40 @@ export default function SimilarStocksPanel(props: {
               s4MinOverlap: standards.s4.minOverlap,
               s5LookbackDays: standards.s5.lookbackDays,
             }
-            const key = JSON.stringify({ symbol: compareSymbol, input })
-            setRequest({ symbol: compareSymbol, input, key })
+            const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
+            setRequest({ kind: 'similar', symbol: compareSymbol, input, key })
           }}
           className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
         >
           计算相似股清单
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            const enabled: Array<1 | 3 | 5 | 6> = [
+              standards.s1.enabled ? 1 : null,
+              standards.s3.enabled ? 3 : null,
+              standards.s5.enabled ? 5 : null,
+              standards.s6.enabled ? 6 : null,
+            ].filter((x): x is 1 | 3 | 5 | 6 => x !== null)
+
+            const input: ScreenerInput = {
+              top: 10,
+              anchorDate: anchorDate ?? undefined,
+              enabled,
+              s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
+              s3LastDays: standards.s3.lastDays,
+              s3ChangePct: standards.s3.changePct,
+              s3VolumeMultiple: standards.s3.volumeMultiple,
+              s5LookbackDays: standards.s5.lookbackDays,
+            }
+            const key = JSON.stringify({ kind: 'screener', input })
+            setRequest({ kind: 'screener', input, key })
+          }}
+          className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-900"
+        >
+          纯筛选选股
         </button>
       </div>
 
@@ -445,7 +506,7 @@ export default function SimilarStocksPanel(props: {
                     onClick={() => {
                       const qs = new URLSearchParams()
                       qs.set('nav', 'similar')
-                      qs.set('seed', String(compareSymbol).toUpperCase())
+                      qs.set('seed', lastMode === 'screener' ? 'SCREENER' : String(compareSymbol).toUpperCase())
                       navigate(`/stocks/${encodeURIComponent(it.symbol)}?${qs.toString()}`)
                     }}
                     className="min-w-0 flex-1 text-left hover:opacity-95"
@@ -517,7 +578,7 @@ export default function SimilarStocksPanel(props: {
         ) : (
           <div className="space-y-1 text-sm text-slate-400">
             <div>暂无结果</div>
-            {standards.s2.enabled && standards.s2.minSimilarity >= 0.8 ? (
+            {lastMode === 'similar' && standards.s2.enabled && standards.s2.minSimilarity >= 0.8 ? (
               <div className="text-xs text-slate-500">标准2阈值偏高；可先把相似度降到 60%~70% 试试</div>
             ) : null}
             {standards.s1.enabled || standards.s3.enabled ? (
