@@ -246,6 +246,18 @@ export default function LifelineMonitor() {
     localStorage.removeItem(CACHE_KEY)
   }
 
+  const openDetail = (symbol: string) => {
+    const symbols = stocks
+      .map((x) => String(x.code || '').toUpperCase())
+      .filter((x) => /^\d{6}$/.test(x))
+    try {
+      window.localStorage.setItem('lifeline_nav:v1', JSON.stringify({ symbols, atISO: new Date().toISOString() }))
+    } catch {
+      void 0
+    }
+    navigate(`/stocks/${encodeURIComponent(symbol)}?nav=lifeline`)
+  }
+
   const isInWatchlist = (code: string) => {
     return watchlist.map((x) => x.toUpperCase()).includes(code.toUpperCase())
   }
@@ -258,7 +270,7 @@ export default function LifelineMonitor() {
         title="5阶段策略选股"
         universe={[]}
         selectedSymbol={null}
-        onSelectSymbol={(s) => navigate(`/stocks/${encodeURIComponent(s)}`)}
+        onSelectSymbol={(s) => openDetail(s)}
         updatedAt={null}
         onBack={() => navigate('/')}
         onOpenDetail={null}
@@ -399,7 +411,7 @@ export default function LifelineMonitor() {
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => navigate(`/stocks/${encodeURIComponent(s.code)}`)}
+                            onClick={() => openDetail(s.code)}
                             className="rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 hover:bg-slate-800"
                           >
                             详情

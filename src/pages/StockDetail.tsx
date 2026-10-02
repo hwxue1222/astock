@@ -423,7 +423,7 @@ export default function StockDetail() {
             return
           }
           if (inLifelineContext) {
-            navigate('/', { state: { activeTab: 'lifeline' } })
+            navigate('/lifeline')
             return
           }
           navigate('/', { state: { activeTab: 'watchlist' } })
