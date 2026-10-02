@@ -120,6 +120,7 @@ export interface SimilarStocksResponse {
     candidateSource?: string
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
     s1?: { applied: boolean; reason?: string }
+    s7?: { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
   }
 }
 

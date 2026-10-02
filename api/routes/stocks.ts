@@ -657,7 +657,7 @@ router.get(
     const enabled = enabledRaw
       .split(',')
       .map((x) => Number(String(x).trim()))
-      .filter((x): x is 1 | 3 | 5 | 6 => x === 1 || x === 3 || x === 5 || x === 6)
+      .filter((x): x is 1 | 3 | 5 | 6 | 7 => x === 1 || x === 3 || x === 5 || x === 6 || x === 7)
     const enabledUniq = Array.from(new Set(enabled))
 
     const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
@@ -665,6 +665,15 @@ router.get(
     const s3ChangePct = Number(req.query.s3ChangePct ?? 9.98)
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
+
+    const kwRaw = String(req.query.s7Keywords ?? '').trim()
+    const s7Keywords = kwRaw
+      ? kwRaw
+          .split(/[\n,，;；\s]+/)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .slice(0, 30)
+      : undefined
 
     const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
@@ -676,12 +685,13 @@ router.get(
         top: Number.isFinite(top) ? top : 10,
         maxCandidates: Number.isFinite(maxCandidates) ? maxCandidates : 600,
         anchorDate,
-        enabled: enabledUniq.length ? (enabledUniq as Array<1 | 3 | 5 | 6>) : [1, 3, 5],
+        enabled: enabledUniq.length ? (enabledUniq as Array<1 | 3 | 5 | 6 | 7>) : [1, 3, 5],
         s1MaxMarketCapYi: Number.isFinite(s1MaxMarketCapYi) ? s1MaxMarketCapYi : 150,
         s3LastDays: Number.isFinite(s3LastDays) ? s3LastDays : 5,
         s3ChangePct: Number.isFinite(s3ChangePct) ? s3ChangePct : 9.98,
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
+        s7Keywords,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'screener' } })
     } catch (e: unknown) {
@@ -709,7 +719,7 @@ router.get(
     const enabled = enabledRaw
       .split(',')
       .map((x) => Number(String(x).trim()))
-      .filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 => x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6)
+      .filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6 || x === 7)
     const enabledUniq = Array.from(new Set(enabled))
 
     const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
@@ -722,6 +732,15 @@ router.get(
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
     const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
+
+    const kwRaw = String(req.query.s7Keywords ?? '').trim()
+    const s7Keywords = kwRaw
+      ? kwRaw
+          .split(/[\n,，;；\s]+/)
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .slice(0, 30)
+      : undefined
 
     const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
@@ -755,6 +774,7 @@ router.get(
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
+        s7Keywords,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
     } catch (e: unknown) {

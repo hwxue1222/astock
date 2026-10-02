@@ -8,6 +8,16 @@ import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem }
 type SimilarInput = Parameters<typeof getSimilarStocks>[1]
 type ScreenerInput = Parameters<typeof getScreenerStocks>[0]
 
+function parseKeywords(raw: string): string[] {
+  const text = String(raw ?? '').trim()
+  if (!text) return []
+  return text
+    .split(/[\n,，;；\s]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .slice(0, 30)
+}
+
 export default function SimilarStocksPanel(props: {
   targetSymbol: string
   klt: KlineKlt
@@ -38,6 +48,7 @@ export default function SimilarStocksPanel(props: {
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
   const compareSymbol = standardSymbol ?? props.targetSymbol
   const anchorDate = similarAnchorDate
+  const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
 
   const data: SimilarStocksResponse | null = similarLast?.data ?? null
   const lastMode: 'similar' | 'screener' = data?.meta?.mode ?? 'similar'
@@ -53,12 +64,13 @@ export default function SimilarStocksPanel(props: {
 
   const currentPlannedKey = useMemo(() => {
     if (lastMode === 'screener') {
-      const enabled: Array<1 | 3 | 5 | 6> = [
+      const enabled: Array<1 | 3 | 5 | 6 | 7> = [
         standards.s1.enabled ? 1 : null,
         standards.s3.enabled ? 3 : null,
         standards.s5.enabled ? 5 : null,
         standards.s6.enabled ? 6 : null,
-      ].filter((x): x is 1 | 3 | 5 | 6 => x !== null)
+        standards.s7.enabled && s7Keywords.length ? 7 : null,
+      ].filter((x): x is 1 | 3 | 5 | 6 | 7 => x !== null)
 
       const input: ScreenerInput = {
         top: 10,
@@ -69,18 +81,20 @@ export default function SimilarStocksPanel(props: {
         s3ChangePct: standards.s3.changePct,
         s3VolumeMultiple: standards.s3.volumeMultiple,
         s5LookbackDays: standards.s5.lookbackDays,
+        s7Keywords,
       }
       return JSON.stringify({ kind: 'screener', input })
     }
 
-    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6> = [
+    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
       standards.s4.enabled ? 4 : null,
       standards.s5.enabled ? 5 : null,
       standards.s6.enabled ? 6 : null,
-    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 => x !== null)
+      standards.s7.enabled && s7Keywords.length ? 7 : null,
+    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -97,10 +111,11 @@ export default function SimilarStocksPanel(props: {
       s3VolumeMultiple: standards.s3.volumeMultiple,
       s4MinOverlap: standards.s4.minOverlap,
       s5LookbackDays: standards.s5.lookbackDays,
+      s7Keywords,
     }
 
     return JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
-  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, standards])
+  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, s7Keywords, standards])
 
   useEffect(() => {
     if (!request) return
@@ -175,6 +190,14 @@ export default function SimilarStocksPanel(props: {
         <div className="text-xs font-semibold text-slate-200">选股标准</div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s2.enabled}
+              onChange={(e) => setStandard('s2', { enabled: e.target.checked })}
+            />
+            标准2
+          </label>
           <div className="text-xs text-slate-400">对比股票</div>
           <input
             value={standardDraft}
@@ -202,8 +225,32 @@ export default function SimilarStocksPanel(props: {
             清除
           </button>
           <div className="text-xs font-semibold text-slate-100">{compareSymbol}</div>
+          <div className="ml-2 text-xs text-slate-400">近</div>
+          <input
+            type="number"
+            value={standards.s2.lastDays}
+            min={3}
+            max={15}
+            step={1}
+            onChange={(e) => setStandard('s2', { lastDays: Number(e.target.value) })}
+            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <div className="text-xs text-slate-400">日 K 线形态相似 ≥</div>
+          <input
+            inputMode="numeric"
+            value={String(Math.round(standards.s2.minSimilarity * 100))}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const pct = raw ? Math.max(0, Math.min(100, Number(raw))) : 0
+              setStandard('s2', { minSimilarity: pct / 100 })
+            }}
+            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <div className="text-xs text-slate-400">%</div>
+        </div>
 
-          <div className="ml-2 text-xs text-slate-400">对比时间</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-xs text-slate-400">对比时间</div>
           <input
             type="date"
             value={similarAnchorDate ?? ''}
@@ -243,39 +290,6 @@ export default function SimilarStocksPanel(props: {
             className="w-24 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
           <div className="text-xs text-slate-400">亿</div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-slate-200">
-            <input
-              type="checkbox"
-              checked={standards.s2.enabled}
-              onChange={(e) => setStandard('s2', { enabled: e.target.checked })}
-            />
-            标准2
-          </label>
-          <div className="text-xs text-slate-400">近</div>
-          <input
-            type="number"
-            value={standards.s2.lastDays}
-            min={3}
-            max={15}
-            step={1}
-            onChange={(e) => setStandard('s2', { lastDays: Number(e.target.value) })}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">日 K 线形态与对比股相似 ≥</div>
-          <input
-            inputMode="numeric"
-            value={String(Math.round(standards.s2.minSimilarity * 100))}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/\D/g, '')
-              const pct = raw ? Math.max(0, Math.min(100, Number(raw))) : 0
-              setStandard('s2', { minSimilarity: pct / 100 })
-            }}
-            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">%</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -390,6 +404,28 @@ export default function SimilarStocksPanel(props: {
           </label>
           <div className="text-xs text-slate-400">股东/实控：国资/政府/国务院/部委</div>
         </div>
+
+        <div className="flex flex-wrap items-start gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s7.enabled}
+              onChange={(e) => setStandard('s7', { enabled: e.target.checked })}
+            />
+            标准7
+          </label>
+          <div className="text-xs text-slate-400">关键字（OR）</div>
+          <textarea
+            value={standards.s7.keywords}
+            onChange={(e) => setStandard('s7', { keywords: e.target.value })}
+            placeholder="例如：AI, 芯片, 国企改革（多个关键字用空格/逗号分隔，关系为 OR）"
+            rows={2}
+            className="min-w-[320px] flex-1 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          {standards.s7.enabled && !s7Keywords.length ? (
+            <div className="text-xs font-semibold text-amber-300">请输入至少1个关键字</div>
+          ) : null}
+        </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
@@ -411,14 +447,15 @@ export default function SimilarStocksPanel(props: {
         <button
           type="button"
           onClick={() => {
-            const enabled: Array<1 | 2 | 3 | 4 | 5 | 6> = [
+            const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
               standards.s1.enabled ? 1 : null,
               standards.s2.enabled ? 2 : null,
               standards.s3.enabled ? 3 : null,
               standards.s4.enabled ? 4 : null,
               standards.s5.enabled ? 5 : null,
               standards.s6.enabled ? 6 : null,
-            ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 => x !== null)
+              standards.s7.enabled && s7Keywords.length ? 7 : null,
+            ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x !== null)
 
             const input: SimilarInput = {
               days: props.days,
@@ -435,6 +472,7 @@ export default function SimilarStocksPanel(props: {
               s3VolumeMultiple: standards.s3.volumeMultiple,
               s4MinOverlap: standards.s4.minOverlap,
               s5LookbackDays: standards.s5.lookbackDays,
+              s7Keywords,
             }
             const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
             setRequest({ kind: 'similar', symbol: compareSymbol, input, key })
@@ -447,12 +485,13 @@ export default function SimilarStocksPanel(props: {
         <button
           type="button"
           onClick={() => {
-            const enabled: Array<1 | 3 | 5 | 6> = [
+            const enabled: Array<1 | 3 | 5 | 6 | 7> = [
               standards.s1.enabled ? 1 : null,
               standards.s3.enabled ? 3 : null,
               standards.s5.enabled ? 5 : null,
               standards.s6.enabled ? 6 : null,
-            ].filter((x): x is 1 | 3 | 5 | 6 => x !== null)
+              standards.s7.enabled && s7Keywords.length ? 7 : null,
+            ].filter((x): x is 1 | 3 | 5 | 6 | 7 => x !== null)
 
             const input: ScreenerInput = {
               top: 10,
@@ -463,6 +502,7 @@ export default function SimilarStocksPanel(props: {
               s3ChangePct: standards.s3.changePct,
               s3VolumeMultiple: standards.s3.volumeMultiple,
               s5LookbackDays: standards.s5.lookbackDays,
+              s7Keywords,
             }
             const key = JSON.stringify({ kind: 'screener', input })
             setRequest({ kind: 'screener', input, key })

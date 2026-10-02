@@ -154,7 +154,7 @@ export async function getSimilarStocks(
     klt: KlineKlt
     fqt: KlineFqt
     anchorDate?: string
-    enabled?: Array<1 | 2 | 3 | 4 | 5 | 6>
+    enabled?: Array<1 | 2 | 3 | 4 | 5 | 6 | 7>
     s1MaxMarketCapYi?: number
     s2LastDays?: number
     s2TurnoverSpikeMultiple?: number
@@ -165,6 +165,7 @@ export async function getSimilarStocks(
     s3LastDays?: number
     s4MinOverlap?: number
     s5LookbackDays?: number
+    s7Keywords?: string[]
     candidates?: string[]
   },
   signal?: AbortSignal,
@@ -187,6 +188,7 @@ export async function getSimilarStocks(
   if (typeof input.s3LastDays === 'number') q.set('s3LastDays', String(input.s3LastDays))
   if (typeof input.s4MinOverlap === 'number') q.set('s4MinOverlap', String(input.s4MinOverlap))
   if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
+  if (input.s7Keywords?.length) q.set('s7Keywords', input.s7Keywords.join(','))
   if (input.candidates?.length) q.set('candidates', input.candidates.join(','))
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/similar?${q.toString()}`,
@@ -199,13 +201,14 @@ export async function getScreenerStocks(
   input: {
     top: number
     anchorDate?: string
-    enabled?: Array<1 | 3 | 5 | 6>
+    enabled?: Array<1 | 3 | 5 | 6 | 7>
     maxCandidates?: number
     s1MaxMarketCapYi?: number
     s3ChangePct?: number
     s3VolumeMultiple?: number
     s3LastDays?: number
     s5LookbackDays?: number
+    s7Keywords?: string[]
   },
   signal?: AbortSignal,
 ): Promise<SimilarStocksResponse> {
@@ -219,6 +222,7 @@ export async function getScreenerStocks(
   if (typeof input.s3ChangePct === 'number') q.set('s3ChangePct', String(input.s3ChangePct))
   if (typeof input.s3VolumeMultiple === 'number') q.set('s3VolumeMultiple', String(input.s3VolumeMultiple))
   if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
+  if (input.s7Keywords?.length) q.set('s7Keywords', input.s7Keywords.join(','))
 
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(`/api/stocks/screener?${q.toString()}`, signal)
   return data

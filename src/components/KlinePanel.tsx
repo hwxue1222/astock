@@ -24,6 +24,24 @@ function fqtLabel(fqt: KlineFqt): string {
   return '前复权'
 }
 
+const BASE_LIMIT_OPTIONS = [60, 90, 120, 180, 260, 360, 520, 900] as const
+
+function clampLimitToOptions(limit: number): number {
+  if (!Number.isFinite(limit)) return 180
+  const list = [...BASE_LIMIT_OPTIONS]
+  if (list.includes(limit as (typeof BASE_LIMIT_OPTIONS)[number])) return limit
+  let best = list[0]
+  let bestDist = Math.abs(limit - best)
+  for (const x of list) {
+    const d = Math.abs(limit - x)
+    if (d < bestDist) {
+      best = x
+      bestDist = d
+    }
+  }
+  return best
+}
+
 export default function KlinePanel(props: {
   symbol: string
   klt: KlineKlt
@@ -34,6 +52,17 @@ export default function KlinePanel(props: {
   const [data, setData] = useState<StockKlineResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const limitOptions = useMemo(() => {
+    const normalized = clampLimitToOptions(props.limit)
+    const set = new Set<number>([normalized, ...BASE_LIMIT_OPTIONS])
+    return Array.from(set).sort((a, b) => a - b)
+  }, [props.limit])
+
+  const selectedLimit = useMemo(() => clampLimitToOptions(props.limit), [props.limit])
+  const limitIndex = useMemo(() => limitOptions.findIndex((x) => x === selectedLimit), [limitOptions, selectedLimit])
+  const canZoomIn = limitIndex > 0
+  const canZoomOut = limitIndex >= 0 && limitIndex < limitOptions.length - 1
 
   useEffect(() => {
     const ac = new AbortController()
@@ -86,7 +115,7 @@ export default function KlinePanel(props: {
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={props.klt}
-            onChange={(e) => props.onChange({ klt: e.target.value as KlineKlt, fqt: props.fqt, limit: props.limit })}
+            onChange={(e) => props.onChange({ klt: e.target.value as KlineKlt, fqt: props.fqt, limit: selectedLimit })}
             className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           >
             <option value="101">日线</option>
@@ -95,21 +124,59 @@ export default function KlinePanel(props: {
           </select>
           <select
             value={props.fqt}
-            onChange={(e) => props.onChange({ klt: props.klt, fqt: e.target.value as KlineFqt, limit: props.limit })}
+            onChange={(e) => props.onChange({ klt: props.klt, fqt: e.target.value as KlineFqt, limit: selectedLimit })}
             className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           >
             <option value="1">前复权</option>
             <option value="0">不复权</option>
           </select>
+
+          <button
+            type="button"
+            disabled={!canZoomIn}
+            onClick={() => {
+              if (!canZoomIn) return
+              const next = limitOptions[Math.max(0, limitIndex - 1)]
+              props.onChange({ klt: props.klt, fqt: props.fqt, limit: next })
+            }}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              canZoomIn
+                ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+            )}
+          >
+            -
+          </button>
           <select
-            value={String(props.limit)}
+            value={String(selectedLimit)}
             onChange={(e) => props.onChange({ klt: props.klt, fqt: props.fqt, limit: Number(e.target.value) })}
             className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           >
-            <option value="120">120</option>
-            <option value="180">180</option>
-            <option value="260">260</option>
+            {limitOptions.map((x) => (
+              <option key={x} value={String(x)}>
+                {x}
+              </option>
+            ))}
           </select>
+
+          <button
+            type="button"
+            disabled={!canZoomOut}
+            onClick={() => {
+              if (!canZoomOut) return
+              const next = limitOptions[Math.min(limitOptions.length - 1, limitIndex + 1)]
+              props.onChange({ klt: props.klt, fqt: props.fqt, limit: next })
+            }}
+            className={cn(
+              'rounded-lg border px-2 py-1 text-xs font-semibold',
+              canZoomOut
+                ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+            )}
+          >
+            +
+          </button>
         </div>
       </div>
 
