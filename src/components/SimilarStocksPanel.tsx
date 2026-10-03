@@ -49,6 +49,7 @@ export default function SimilarStocksPanel(props: {
   const compareSymbol = standardSymbol ?? props.targetSymbol
   const anchorDate = similarAnchorDate
   const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
+  const s7Strict = standards.s7.strict
 
   const data: SimilarStocksResponse | null = similarLast?.data ?? null
   const lastMode: 'similar' | 'screener' = data?.meta?.mode ?? 'similar'
@@ -82,6 +83,7 @@ export default function SimilarStocksPanel(props: {
         s3VolumeMultiple: standards.s3.volumeMultiple,
         s5LookbackDays: standards.s5.lookbackDays,
         s7Keywords,
+        s7Strict,
       }
       return JSON.stringify({ kind: 'screener', input })
     }
@@ -112,10 +114,11 @@ export default function SimilarStocksPanel(props: {
       s4MinOverlap: standards.s4.minOverlap,
       s5LookbackDays: standards.s5.lookbackDays,
       s7Keywords,
+      s7Strict,
     }
 
     return JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
-  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, s7Keywords, standards])
+  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, s7Keywords, s7Strict, standards])
 
   useEffect(() => {
     if (!request) return
@@ -413,6 +416,14 @@ export default function SimilarStocksPanel(props: {
             标准7
           </label>
           <div className="text-xs text-slate-400">关键字（OR）</div>
+          <label className="ml-2 flex items-center gap-2 text-xs text-slate-300">
+            <input
+              type="checkbox"
+              checked={standards.s7.strict}
+              onChange={(e) => setStandard('s7', { strict: e.target.checked })}
+            />
+            严格校验
+          </label>
           <textarea
             value={standards.s7.keywords}
             onChange={(e) => setStandard('s7', { keywords: e.target.value })}
@@ -471,6 +482,7 @@ export default function SimilarStocksPanel(props: {
               s4MinOverlap: standards.s4.minOverlap,
               s5LookbackDays: standards.s5.lookbackDays,
               s7Keywords,
+              s7Strict,
             }
             const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
             setRequest({ kind: 'similar', symbol: compareSymbol, input, key })
@@ -501,6 +513,7 @@ export default function SimilarStocksPanel(props: {
               s3VolumeMultiple: standards.s3.volumeMultiple,
               s5LookbackDays: standards.s5.lookbackDays,
               s7Keywords,
+              s7Strict,
             }
             const key = JSON.stringify({ kind: 'screener', input })
             setRequest({ kind: 'screener', input, key })
@@ -601,7 +614,7 @@ export default function SimilarStocksPanel(props: {
                       <div className="mt-1 flex flex-wrap gap-1">
                         <span
                           className="inline-flex items-center rounded-md border border-violet-800 bg-violet-950 px-2 py-0.5 text-[10px] font-semibold text-violet-200"
-                          title={`标准7命中：${it.s7Match?.keyword}（来源：${it.s7Match?.source}；数据：${it.s7Match?.provider}；URL：${it.s7Match?.sourceUrl}）`}
+                          title={`标准7命中：${it.s7Match?.keyword}（来源：${it.s7Match?.source}；数据：${it.s7Match?.provider}；URL：${it.s7Match?.sourceUrl}${it.s7Match?.evidence ? `；摘要：${it.s7Match.evidence}` : ''}）`}
                         >
                           {s7Tag}
                         </span>

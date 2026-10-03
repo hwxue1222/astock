@@ -166,6 +166,7 @@ export async function getSimilarStocks(
     s4MinOverlap?: number
     s5LookbackDays?: number
     s7Keywords?: string[]
+    s7Strict?: boolean
     candidates?: string[]
   },
   signal?: AbortSignal,
@@ -189,6 +190,7 @@ export async function getSimilarStocks(
   if (typeof input.s4MinOverlap === 'number') q.set('s4MinOverlap', String(input.s4MinOverlap))
   if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
   if (input.s7Keywords?.length) q.set('s7Keywords', input.s7Keywords.join(','))
+  if (typeof input.s7Strict === 'boolean') q.set('s7Strict', input.s7Strict ? '1' : '0')
   if (input.candidates?.length) q.set('candidates', input.candidates.join(','))
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/similar?${q.toString()}`,
@@ -209,6 +211,7 @@ export async function getScreenerStocks(
     s3LastDays?: number
     s5LookbackDays?: number
     s7Keywords?: string[]
+    s7Strict?: boolean
   },
   signal?: AbortSignal,
 ): Promise<SimilarStocksResponse> {
@@ -223,6 +226,7 @@ export async function getScreenerStocks(
   if (typeof input.s3VolumeMultiple === 'number') q.set('s3VolumeMultiple', String(input.s3VolumeMultiple))
   if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
   if (input.s7Keywords?.length) q.set('s7Keywords', input.s7Keywords.join(','))
+  if (typeof input.s7Strict === 'boolean') q.set('s7Strict', input.s7Strict ? '1' : '0')
 
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(`/api/stocks/screener?${q.toString()}`, signal)
   return data

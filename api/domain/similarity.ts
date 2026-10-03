@@ -6,6 +6,7 @@ import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getEastmoneyCoreConceptionTags } from '../providers/eastmoneyCoreConception.js'
+import { fetchText } from '../providers/http.js'
 import { detectKlinePatterns, hasPatternInLastNDays } from './klineStrongPatterns.js'
 
 type Candle = {
@@ -27,6 +28,7 @@ export type SimilarStock = {
     source: 'name' | 'industry' | 'concept' | 'news' | 'announcement'
     provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
     sourceUrl: string
+    evidence?: string
   }
 }
 
@@ -217,6 +219,53 @@ function emCode(code: string): string {
   return `SZ${c}`
 }
 
+function stripHtmlToText(html: string): string {
+  const s = String(html ?? '')
+  const noScript = s.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  const noTags = noScript.replace(/<[^>]+>/g, ' ')
+  return noTags.replace(/\s+/g, ' ').trim()
+}
+
+function buildEvidence(text: string, keyword: string, around = 48): string {
+  const hay = text
+  const needle = keyword
+  const i = hay.toLowerCase().indexOf(needle.toLowerCase())
+  if (i < 0) return ''
+  const a = Math.max(0, i - around)
+  const b = Math.min(hay.length, i + needle.length + around)
+  return hay.slice(a, b)
+}
+
+function hasNearbyName(text: string, keyword: string, name: string, window = 220): boolean {
+  const hay = text.toLowerCase()
+  const k = keyword.toLowerCase()
+  const n = name.toLowerCase()
+  const ki = hay.indexOf(k)
+  if (ki < 0) return false
+  if (!n.trim()) return true
+  const start = Math.max(0, ki - window)
+  const end = Math.min(hay.length, ki + k.length + window)
+  return hay.slice(start, end).includes(n)
+}
+
+async function verifyNewsMatch(input: {
+  code: string
+  name: string
+  keyword: string
+  url: string
+}): Promise<{ evidence: string } | null> {
+  const url = String(input.url ?? '').trim()
+  if (!url) return null
+  const raw = await fetchText(url, { timeoutMs: 15_000, headers: { referer: 'https://data.eastmoney.com/' } })
+  const text = stripHtmlToText(raw)
+  if (!text) return null
+  if (!text.toLowerCase().includes(String(input.keyword).toLowerCase())) return null
+  const name = String(input.name ?? '').trim()
+  if (!hasNearbyName(text, input.keyword, name)) return null
+  const evidence = buildEvidence(text, input.keyword)
+  return { evidence: evidence || '' }
+}
+
 function normalizeKeywords(raw: string[] | undefined): string[] {
   const list = Array.isArray(raw) ? raw : []
   const out: string[] = []
@@ -354,6 +403,7 @@ async function applyStd7Filter(input: {
   keywords: string[]
   top: number
   maxScan: number
+  strict: boolean
 }): Promise<{ rows: SimilarStock[]; meta: { applied: boolean; keywords: string[]; scanned: number; kept: number; reason?: string } }> {
   const keywords = normalizeKeywords(input.keywords)
   if (!keywords.length) {
@@ -370,11 +420,25 @@ async function applyStd7Filter(input: {
 
   while (true) {
     const slice = list.slice(0, scan)
-    const matched = await mapLimit<SimilarStock, SimilarStock | null>(slice, 6, async (row) => {
+    const concurrency = input.strict ? 3 : 6
+    const matched = await mapLimit<SimilarStock, SimilarStock | null>(slice, concurrency, async (row) => {
       const cached = await getKeywordBlobCached({ code: row.symbol, ttlMs: 6 * 3600_000 })
       if (!matchesAnyKeyword(cached.text, keywords)) return null
       const match = findKeywordMatch(cached.blob, keywords)
-      return match ? { ...row, s7Match: match } : row
+      if (!match) return null
+
+      if (input.strict && (match.source === 'news' || match.source === 'announcement')) {
+        const ok = await verifyNewsMatch({
+          code: row.symbol,
+          name: cached.blob.name || row.name || '',
+          keyword: match.keyword,
+          url: match.sourceUrl,
+        }).catch(() => null)
+        if (!ok) return null
+        return { ...row, s7Match: { ...match, evidence: ok.evidence } }
+      }
+
+      return { ...row, s7Match: match }
     })
     kept = matched.filter((x): x is SimilarStock => x !== null)
     if (kept.length >= want) break
@@ -585,6 +649,7 @@ export async function findSimilarStocks(input: {
   s4MinOverlap?: number
   s5LookbackDays?: number
   s7Keywords?: string[]
+  s7Strict?: boolean
 }): Promise<{
   target: string
   candidates: number
@@ -662,6 +727,7 @@ export async function findSimilarStocks(input: {
     | { applied: boolean; source?: string; kept?: number; reason?: string }
     | undefined
   const s7Keywords = normalizeKeywords(input.s7Keywords)
+  const s7Strict = input.s7Strict !== false
   let s7Meta:
     | { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
     | undefined
@@ -778,7 +844,7 @@ export async function findSimilarStocks(input: {
       .sort((a, b) => b.score - a.score)
 
     if (enabled.has(7)) {
-      const out = await applyStd7Filter({ rows: base, keywords: s7Keywords, top, maxScan: candidates.length })
+      const out = await applyStd7Filter({ rows: base, keywords: s7Keywords, top, maxScan: candidates.length, strict: s7Strict })
       base = out.rows
       s7Meta = out.meta
     }
@@ -1046,7 +1112,7 @@ export async function findSimilarStocks(input: {
   let scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
 
   if (enabled.has(7)) {
-    const out = await applyStd7Filter({ rows: scored, keywords: s7Keywords, top, maxScan: candidates.length })
+    const out = await applyStd7Filter({ rows: scored, keywords: s7Keywords, top, maxScan: candidates.length, strict: s7Strict })
     scored = out.rows
     s7Meta = out.meta
   }
@@ -1067,6 +1133,7 @@ export async function screenStocks(input: {
   s3VolumeMultiple?: number
   s5LookbackDays?: number
   s7Keywords?: string[]
+  s7Strict?: boolean
 }): Promise<{
   target: string
   candidates: number
@@ -1091,6 +1158,7 @@ export async function screenStocks(input: {
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
   const s5LookbackDays = Math.max(1, Math.min(365, Math.floor(input.s5LookbackDays ?? 15)))
   const s7Keywords = normalizeKeywords(input.s7Keywords)
+  const s7Strict = input.s7Strict !== false
 
   const anchorDate = input.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate) ? input.anchorDate : undefined
   const anchorMs = anchorDate ? Date.parse(`${anchorDate}T23:59:59.999Z`) : undefined
@@ -1249,7 +1317,7 @@ export async function screenStocks(input: {
   let picked = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
 
   if (enabled.has(7)) {
-    const out = await applyStd7Filter({ rows: picked, keywords: s7Keywords, top, maxScan: candidates.length })
+    const out = await applyStd7Filter({ rows: picked, keywords: s7Keywords, top, maxScan: candidates.length, strict: s7Strict })
     picked = out.rows
     meta.s7 = out.meta
   }

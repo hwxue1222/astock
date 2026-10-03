@@ -111,6 +111,7 @@ export interface SimilarStockItem {
     source: 'name' | 'industry' | 'concept' | 'news' | 'announcement'
     provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
     sourceUrl: string
+    evidence?: string
   }
 }
 

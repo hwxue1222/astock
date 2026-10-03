@@ -675,6 +675,9 @@ router.get(
           .slice(0, 30)
       : undefined
 
+    const s7StrictRaw = String(req.query.s7Strict ?? '1').trim().toLowerCase()
+    const s7Strict = s7StrictRaw === '1' || s7StrictRaw === 'true' || s7StrictRaw === 'yes'
+
     const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
 
@@ -692,6 +695,7 @@ router.get(
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
         s7Keywords,
+        s7Strict,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'screener' } })
     } catch (e: unknown) {
@@ -742,6 +746,9 @@ router.get(
           .slice(0, 30)
       : undefined
 
+    const s7StrictRaw = String(req.query.s7Strict ?? '1').trim().toLowerCase()
+    const s7Strict = s7StrictRaw === '1' || s7StrictRaw === 'true' || s7StrictRaw === 'yes'
+
     const anchorDateRaw = typeof req.query.anchorDate === 'string' ? req.query.anchorDate.trim() : ''
     const anchorDate = /^\d{4}-\d{2}-\d{2}$/.test(anchorDateRaw) ? anchorDateRaw : undefined
 
@@ -775,6 +782,7 @@ router.get(
         s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
         s7Keywords,
+        s7Strict,
       })
       res.status(200).json({ success: true, ...out, meta: { ...out.meta, source: 'kline_volume_similarity' } })
     } catch (e: unknown) {
