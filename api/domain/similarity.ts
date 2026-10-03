@@ -682,7 +682,8 @@ export async function findSimilarStocks(input: {
   const baseLimit = enabled.has(2) || enabled.has(3) ? Math.max(20, window + 1) : 0
   const limit = enabled.has(4) ? Math.max(baseLimit, 220) : baseLimit
   const limit2 = enabled.has(5) ? Math.max(limit, Math.min(900, s5LookbackDays + 30)) : limit
-  const fetchLimit = input.anchorDate ? Math.max(limit2, 900) : limit2
+  const fetchLimitTarget = input.anchorDate ? Math.max(limit2, 900) : limit2
+  const fetchLimitCandidates = limit2
   const klineFqt = enabled.has(3) ? '0' : '1'
 
   const anchorDate = input.anchorDate && /^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate) ? input.anchorDate : undefined
@@ -857,7 +858,7 @@ export async function findSimilarStocks(input: {
         code: target,
         klt: '101',
         fqt: klineFqt,
-        limit: fetchLimit,
+        limit: fetchLimitTarget,
         ttlMs: 10 * 60 * 1000,
         timeoutMs: 12_000,
         fallbackToTencent: true,
@@ -865,7 +866,6 @@ export async function findSimilarStocks(input: {
     : []
 
   const targetCandlesAsOf = sliceAsOf(targetCandles)
-
   const fvTarget = enabled.has(2) ? buildDailyShapeFeature({ candles: targetCandlesAsOf, lastDays: s2LastDays }) : []
 
   const targetPatternHits = enabled.has(4) ? detectKlinePatterns(targetCandlesAsOf) : []
@@ -911,13 +911,12 @@ export async function findSimilarStocks(input: {
             code,
             klt: '101',
             fqt: klineFqt,
-            limit: fetchLimit,
+            limit: fetchLimitCandidates,
             ttlMs: 10 * 60 * 1000,
             timeoutMs: 12_000,
             fallbackToTencent: true,
           })
-          const candlesAsOf = sliceAsOf(candles)
-          const s4 = passStd4(candlesAsOf)
+          const s4 = passStd4(candles)
           if (!s4.ok) continue
 
           if (pickedSet.has(code)) continue
@@ -962,13 +961,12 @@ export async function findSimilarStocks(input: {
             code,
             klt: '101',
             fqt: klineFqt,
-            limit: fetchLimit,
+            limit: fetchLimitCandidates,
             ttlMs: 10 * 60 * 1000,
             timeoutMs: 12_000,
             fallbackToTencent: true,
           })
-          const candlesAsOf = sliceAsOf(candles)
-          const hits = detectKlinePatterns(candlesAsOf)
+          const hits = detectKlinePatterns(candles)
           const hit = hits.find((h) => h.id === 'roucuo_line')
           if (!hit) continue
 
@@ -996,8 +994,7 @@ export async function findSimilarStocks(input: {
   }
 
   const passStd3 = (candles: Candle[]): boolean => {
-    const cs = sliceAsOf(candles)
-    const xs = cs.slice(-1 * (s3LastDays + 1))
+    const xs = candles.slice(-1 * (s3LastDays + 1))
     if (xs.length < 2) return false
     for (let i = 1; i < xs.length; i += 1) {
       const prev = xs[i - 1]
@@ -1027,7 +1024,7 @@ export async function findSimilarStocks(input: {
             code,
             klt: '101',
             fqt: klineFqt,
-            limit: fetchLimit,
+            limit: fetchLimitCandidates,
             ttlMs: 10 * 60 * 1000,
             timeoutMs: 12_000,
             fallbackToTencent: true,
@@ -1065,25 +1062,24 @@ export async function findSimilarStocks(input: {
         code,
         klt: '101',
         fqt: klineFqt,
-        limit: fetchLimit,
+        limit: fetchLimitCandidates,
         ttlMs: 10 * 60 * 1000,
         timeoutMs: 12_000,
         fallbackToTencent: true,
       })
-      const candlesAsOf = sliceAsOf(candles)
-
+      const candlesLatest = candles
       if (enabled.has(5)) {
-        if (!passStd5(candlesAsOf)) return null
+        if (!passStd5(candlesLatest)) return null
       }
       if (enabled.has(3)) {
-        if (!passStd3(candlesAsOf)) return null
+        if (!passStd3(candlesLatest)) return null
       }
 
-      const s4 = passStd4(candlesAsOf)
+      const s4 = passStd4(candlesLatest)
       if (!s4.ok) return null
 
       if (enabled.has(2)) {
-        const fv = buildDailyShapeFeature({ candles: candlesAsOf, lastDays: s2LastDays })
+        const fv = buildDailyShapeFeature({ candles: candlesLatest, lastDays: s2LastDays })
         if (!fv.length || !fvTarget.length) return null
         const s = cosine(fvTarget, fv)
         const sim = clamp01((s + 1) / 2)

@@ -274,7 +274,12 @@ export default function SimilarStocksPanel(props: {
           />
           <div className="text-xs text-slate-400">%</div>
 
-          <div className="ml-2 text-xs text-slate-400">对比时间</div>
+          <div
+            className="ml-2 text-xs text-slate-400"
+            title="仅用于冻结对比股在该日期及之前的形态；候选股票用最新形态来匹配"
+          >
+            对比时间
+          </div>
           <input
             type="date"
             value={similarAnchorDate ?? ''}
