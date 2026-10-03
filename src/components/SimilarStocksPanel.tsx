@@ -193,6 +193,29 @@ export default function SimilarStocksPanel(props: {
           <label className="flex items-center gap-2 text-xs text-slate-200">
             <input
               type="checkbox"
+              checked={standards.s1.enabled}
+              onChange={(e) => setStandard('s1', { enabled: e.target.checked })}
+            />
+            标准1
+          </label>
+          <div className="text-xs text-slate-400">总市值 ≤</div>
+          <input
+            inputMode="numeric"
+            value={String(standards.s1.maxMarketCapYi)}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/\D/g, '')
+              const v = raw ? Number(raw) : 0
+              setStandard('s1', { maxMarketCapYi: v })
+            }}
+            className="w-24 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+          />
+          <div className="text-xs text-slate-400">亿</div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
               checked={standards.s2.enabled}
               onChange={(e) => setStandard('s2', { enabled: e.target.checked })}
             />
@@ -247,10 +270,8 @@ export default function SimilarStocksPanel(props: {
             className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
           />
           <div className="text-xs text-slate-400">%</div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="text-xs text-slate-400">对比时间</div>
+          <div className="ml-2 text-xs text-slate-400">对比时间</div>
           <input
             type="date"
             value={similarAnchorDate ?? ''}
@@ -267,29 +288,6 @@ export default function SimilarStocksPanel(props: {
           >
             最新
           </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-slate-200">
-            <input
-              type="checkbox"
-              checked={standards.s1.enabled}
-              onChange={(e) => setStandard('s1', { enabled: e.target.checked })}
-            />
-            标准1
-          </label>
-          <div className="text-xs text-slate-400">总市值 ≤</div>
-          <input
-            inputMode="numeric"
-            value={String(standards.s1.maxMarketCapYi)}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/\D/g, '')
-              const v = raw ? Number(raw) : 0
-              setStandard('s1', { maxMarketCapYi: v })
-            }}
-            className="w-24 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs text-slate-200"
-          />
-          <div className="text-xs text-slate-400">亿</div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
