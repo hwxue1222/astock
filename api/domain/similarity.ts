@@ -22,6 +22,12 @@ export type SimilarStock = {
   name: string | undefined
   score: number
   s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
+  s7Match?: {
+    keyword: string
+    source: 'name' | 'industry' | 'concept' | 'news' | 'announcement'
+    provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
+    sourceUrl: string
+  }
 }
 
 type UniverseEntry = {
@@ -183,8 +189,33 @@ type CacheKey = string
 type CacheVal = { tsMs: number; candles: Candle[] }
 const cache = new Map<CacheKey, CacheVal>()
 
-type KeywordCacheVal = { tsMs: number; text: string }
+type KeywordBlob = {
+  name?: string
+  industry?: string
+  concepts?: string[]
+  quoteSourceUrl?: string
+  conceptSourceUrl?: string
+  newsText?: string
+  annText?: string
+  newsItems?: Array<{ title?: string; summary?: string; url?: string }>
+  annItems?: Array<{ title?: string; summary?: string; url?: string }>
+}
+
+type KeywordCacheVal = { tsMs: number; text: string; blob: KeywordBlob }
 const keywordCache = new Map<string, KeywordCacheVal>()
+
+function guessSecid(code: string): string {
+  const c = String(code ?? '').trim()
+  if (!/^\d{6}$/.test(c)) return `0.${c}`
+  if (c.startsWith('6') || c.startsWith('9')) return `1.${c}`
+  return `0.${c}`
+}
+
+function emCode(code: string): string {
+  const c = String(code ?? '').trim()
+  if (c.startsWith('6') || c.startsWith('688')) return `SH${c}`
+  return `SZ${c}`
+}
 
 function normalizeKeywords(raw: string[] | undefined): string[] {
   const list = Array.isArray(raw) ? raw : []
@@ -208,11 +239,51 @@ function matchesAnyKeyword(text: string, keywords: string[]): boolean {
   })
 }
 
-async function getKeywordTextCached(input: { code: string; ttlMs: number }): Promise<string> {
+function findKeywordMatch(blob: KeywordBlob, keywords: string[]): SimilarStock['s7Match'] | null {
+  const name = (blob.name ?? '').toLowerCase()
+  const industry = (blob.industry ?? '').toLowerCase()
+  const concepts = (blob.concepts ?? []).join(' ').toLowerCase()
+  const news = (blob.newsText ?? '').toLowerCase()
+  const ann = (blob.annText ?? '').toLowerCase()
+
+  const quoteUrl = String(blob.quoteSourceUrl ?? '').trim()
+  const conceptUrl = String(blob.conceptSourceUrl ?? '').trim()
+
+  for (const k of keywords) {
+    const needle = String(k ?? '').trim().toLowerCase()
+    if (!needle) continue
+    if (name.includes(needle) && quoteUrl) return { keyword: k, source: 'name', provider: 'eastmoney_quote', sourceUrl: quoteUrl }
+    if (industry.includes(needle) && quoteUrl)
+      return { keyword: k, source: 'industry', provider: 'eastmoney_quote', sourceUrl: quoteUrl }
+    if (concepts.includes(needle) && conceptUrl)
+      return { keyword: k, source: 'concept', provider: 'eastmoney_concept', sourceUrl: conceptUrl }
+
+    if (news.includes(needle)) {
+      const hit = (blob.newsItems ?? []).find((it) => {
+        const t = `${it.title ?? ''} ${it.summary ?? ''}`.toLowerCase()
+        return t.includes(needle) && Boolean(it.url)
+      })
+      const url = String(hit?.url ?? '').trim()
+      if (url) return { keyword: k, source: 'news', provider: 'eastmoney_news', sourceUrl: url }
+    }
+
+    if (ann.includes(needle)) {
+      const hit = (blob.annItems ?? []).find((it) => {
+        const t = `${it.title ?? ''} ${it.summary ?? ''}`.toLowerCase()
+        return t.includes(needle) && Boolean(it.url)
+      })
+      const url = String(hit?.url ?? '').trim()
+      if (url) return { keyword: k, source: 'announcement', provider: 'eastmoney_announcement', sourceUrl: url }
+    }
+  }
+  return null
+}
+
+async function getKeywordBlobCached(input: { code: string; ttlMs: number }): Promise<KeywordCacheVal> {
   const code = normalizeAshareCode(input.code)
-  if (!/^\d{6}$/.test(code)) return ''
+  if (!/^\d{6}$/.test(code)) return { tsMs: Date.now(), text: '', blob: {} }
   const hit = keywordCache.get(code)
-  if (hit && Date.now() - hit.tsMs <= input.ttlMs) return hit.text
+  if (hit && Date.now() - hit.tsMs <= input.ttlMs) return hit
 
   const [quote, concepts, news, ann] = await Promise.all([
     getEastmoneyQuote({ code, timeoutMs: 10_000 }).catch(() => ({} as Awaited<ReturnType<typeof getEastmoneyQuote>>)),
@@ -223,23 +294,59 @@ async function getKeywordTextCached(input: { code: string; ttlMs: number }): Pro
 
   const parts: string[] = []
   parts.push(code)
-  if (quote.name) parts.push(String(quote.name))
-  if (quote.industry) parts.push(String(quote.industry))
-  if (Array.isArray(concepts) && concepts.length) parts.push(concepts.join(' '))
-  for (const e of news) {
-    if (e.title) parts.push(String(e.title))
-    if (e.summary) parts.push(String(e.summary))
-    if (e.sourceName) parts.push(String(e.sourceName))
-  }
-  for (const e of ann) {
-    if (e.title) parts.push(String(e.title))
-    if (e.summary) parts.push(String(e.summary))
-    if (e.sourceName) parts.push(String(e.sourceName))
+  const blob: KeywordBlob = {
+    name: quote.name ? String(quote.name) : undefined,
+    industry: quote.industry ? String(quote.industry) : undefined,
+    concepts: Array.isArray(concepts) ? concepts : [],
   }
 
+  const q = new URLSearchParams()
+  q.set('secid', guessSecid(code))
+  q.set('fields', 'f58,f14,f127,f116,f117,f20,f21,f9,f162')
+  q.set('ut', 'bd1d9ddb04089700cf9c27f6f7426281')
+  blob.quoteSourceUrl = `https://push2.eastmoney.com/api/qt/stock/get?${q.toString()}`
+  blob.conceptSourceUrl = `https://emweb.securities.eastmoney.com/PC_HSF10/CoreConception/CoreConceptionAjax?code=${encodeURIComponent(
+    emCode(code),
+  )}`
+  if (blob.name) parts.push(blob.name)
+  if (blob.industry) parts.push(blob.industry)
+  if (blob.concepts?.length) parts.push(blob.concepts.join(' '))
+
+  const newsParts: string[] = []
+  for (const e of news) {
+    if (e.title) newsParts.push(String(e.title))
+    if (e.summary) newsParts.push(String(e.summary))
+    if (e.sourceName) newsParts.push(String(e.sourceName))
+  }
+
+  blob.newsItems = news.map((e) => ({
+    title: e.title,
+    summary: e.summary,
+    url: e.sourceUrl,
+  }))
+
+  const annParts: string[] = []
+  for (const e of ann) {
+    if (e.title) annParts.push(String(e.title))
+    if (e.summary) annParts.push(String(e.summary))
+    if (e.sourceName) annParts.push(String(e.sourceName))
+  }
+
+  blob.annItems = ann.map((e) => ({
+    title: e.title,
+    summary: e.summary,
+    url: e.sourceUrl,
+  }))
+
+  blob.newsText = newsParts.join(' ').replace(/\s+/g, ' ').trim() || undefined
+  blob.annText = annParts.join(' ').replace(/\s+/g, ' ').trim() || undefined
+  if (blob.newsText) parts.push(blob.newsText)
+  if (blob.annText) parts.push(blob.annText)
+
   const text = parts.join(' ').replace(/\s+/g, ' ').trim()
-  keywordCache.set(code, { tsMs: Date.now(), text })
-  return text
+  const val: KeywordCacheVal = { tsMs: Date.now(), text, blob }
+  keywordCache.set(code, val)
+  return val
 }
 
 async function applyStd7Filter(input: {
@@ -264,8 +371,10 @@ async function applyStd7Filter(input: {
   while (true) {
     const slice = list.slice(0, scan)
     const matched = await mapLimit<SimilarStock, SimilarStock | null>(slice, 6, async (row) => {
-      const text = await getKeywordTextCached({ code: row.symbol, ttlMs: 6 * 3600_000 })
-      return matchesAnyKeyword(text, keywords) ? row : null
+      const cached = await getKeywordBlobCached({ code: row.symbol, ttlMs: 6 * 3600_000 })
+      if (!matchesAnyKeyword(cached.text, keywords)) return null
+      const match = findKeywordMatch(cached.blob, keywords)
+      return match ? { ...row, s7Match: match } : row
     })
     kept = matched.filter((x): x is SimilarStock => x !== null)
     if (kept.length >= want) break

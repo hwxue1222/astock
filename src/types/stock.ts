@@ -106,6 +106,12 @@ export interface SimilarStockItem {
   name: string | undefined
   score: number
   s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
+  s7Match?: {
+    keyword: string
+    source: 'name' | 'industry' | 'concept' | 'news' | 'announcement'
+    provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
+    sourceUrl: string
+  }
 }
 
 export interface SimilarStocksResponse {

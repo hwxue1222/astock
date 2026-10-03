@@ -531,6 +531,7 @@ export default function SimilarStocksPanel(props: {
               const patternTitle = patternHits
                 .map((x) => (x.kind === 'strong' ? `强势:${x.name}` : x.kind === 'reversal' ? `反转:${x.name}` : `震荡待涨:${x.name}`))
                 .join('、')
+              const s7Tag = it.s7Match?.keyword ? `KW:${it.s7Match.keyword}` : ''
 
               return (
                 <div
@@ -593,6 +594,17 @@ export default function SimilarStocksPanel(props: {
                             +{patternHits.length - 6}
                           </span>
                         ) : null}
+                      </div>
+                    ) : null}
+
+                    {s7Tag ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <span
+                          className="inline-flex items-center rounded-md border border-violet-800 bg-violet-950 px-2 py-0.5 text-[10px] font-semibold text-violet-200"
+                          title={`标准7命中：${it.s7Match?.keyword}（来源：${it.s7Match?.source}；数据：${it.s7Match?.provider}；URL：${it.s7Match?.sourceUrl}）`}
+                        >
+                          {s7Tag}
+                        </span>
                       </div>
                     ) : null}
                     <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
