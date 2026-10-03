@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIndustryMoneyflow, getQuotes, getSimilarStocks, getScreenerStocks } from '@/lib/stockApi'
+import { getIndustryMoneyflow, getQuotes, getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
 
 type SimilarInput = Parameters<typeof getSimilarStocks>[1]
-type ScreenerInput = Parameters<typeof getScreenerStocks>[0]
 
 function parseKeywords(raw: string): string[] {
   const text = String(raw ?? '').trim()
@@ -49,45 +48,16 @@ export default function SimilarStocksPanel(props: {
   const compareSymbol = standardSymbol ?? props.targetSymbol
   const anchorDate = similarAnchorDate
   const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
-  const s7Strict = standards.s7.strict
+  const s7Strict = true
 
   const data: SimilarStocksResponse | null = similarLast?.data ?? null
-  const lastMode: 'similar' | 'screener' = data?.meta?.mode ?? 'similar'
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [request, setRequest] = useState<
-    | { kind: 'similar'; symbol: string; input: SimilarInput; key: string }
-    | { kind: 'screener'; input: ScreenerInput; key: string }
-    | null
-  >(null)
+  const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
   const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
 
-  const currentPlannedKey = useMemo(() => {
-    if (lastMode === 'screener') {
-      const enabled: Array<1 | 3 | 5 | 6 | 7> = [
-        standards.s1.enabled ? 1 : null,
-        standards.s3.enabled ? 3 : null,
-        standards.s5.enabled ? 5 : null,
-        standards.s6.enabled ? 6 : null,
-        standards.s7.enabled && s7Keywords.length ? 7 : null,
-      ].filter((x): x is 1 | 3 | 5 | 6 | 7 => x !== null)
-
-      const input: ScreenerInput = {
-        top: 10,
-        anchorDate: anchorDate ?? undefined,
-        enabled,
-        s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
-        s3LastDays: standards.s3.lastDays,
-        s3ChangePct: standards.s3.changePct,
-        s3VolumeMultiple: standards.s3.volumeMultiple,
-        s5LookbackDays: standards.s5.lookbackDays,
-        s7Keywords,
-        s7Strict,
-      }
-      return JSON.stringify({ kind: 'screener', input })
-    }
-
+  const currentPlanned = useMemo(() => {
     const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
@@ -117,8 +87,9 @@ export default function SimilarStocksPanel(props: {
       s7Strict,
     }
 
-    return JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
-  }, [anchorDate, compareSymbol, lastMode, props.days, props.fqt, props.klt, s7Keywords, s7Strict, standards])
+    const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
+    return { symbol: compareSymbol, input, key }
+  }, [anchorDate, compareSymbol, props.days, props.fqt, props.klt, s7Keywords, s7Strict, standards])
 
   useEffect(() => {
     if (!request) return
@@ -126,12 +97,7 @@ export default function SimilarStocksPanel(props: {
     setLoading(true)
     setError(null)
 
-    const run =
-      request.kind === 'similar'
-        ? getSimilarStocks(request.symbol, request.input, ac.signal)
-        : getScreenerStocks(request.input, ac.signal)
-
-    run
+    getSimilarStocks(request.symbol, request.input, ac.signal)
       .then((d) => {
         if (ac.signal.aborted) return
         setSimilarLast({ key: request.key, data: d, atISO: new Date().toISOString() })
@@ -421,14 +387,6 @@ export default function SimilarStocksPanel(props: {
             标准7
           </label>
           <div className="text-xs text-slate-400">关键字（OR）</div>
-          <label className="ml-2 flex items-center gap-2 text-xs text-slate-300">
-            <input
-              type="checkbox"
-              checked={standards.s7.strict}
-              onChange={(e) => setStandard('s7', { strict: e.target.checked })}
-            />
-            严格校验
-          </label>
           <textarea
             value={standards.s7.keywords}
             onChange={(e) => setStandard('s7', { keywords: e.target.value })}
@@ -460,76 +418,14 @@ export default function SimilarStocksPanel(props: {
       <div className="mt-3 flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={() => {
-            const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
-              standards.s1.enabled ? 1 : null,
-              standards.s2.enabled ? 2 : null,
-              standards.s3.enabled ? 3 : null,
-              standards.s4.enabled ? 4 : null,
-              standards.s5.enabled ? 5 : null,
-              standards.s6.enabled ? 6 : null,
-              standards.s7.enabled && s7Keywords.length ? 7 : null,
-            ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x !== null)
-
-            const input: SimilarInput = {
-              days: props.days,
-              top: 10,
-              klt: props.klt,
-              fqt: props.fqt,
-              anchorDate: anchorDate ?? undefined,
-              enabled,
-              s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
-              s2LastDays: standards.s2.lastDays,
-              s2MinSimilarity: standards.s2.minSimilarity,
-              s3LastDays: standards.s3.lastDays,
-              s3ChangePct: standards.s3.changePct,
-              s3VolumeMultiple: standards.s3.volumeMultiple,
-              s4MinOverlap: standards.s4.minOverlap,
-              s5LookbackDays: standards.s5.lookbackDays,
-              s7Keywords,
-              s7Strict,
-            }
-            const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
-            setRequest({ kind: 'similar', symbol: compareSymbol, input, key })
-          }}
+          onClick={() => setRequest(currentPlanned)}
           className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
         >
-          计算相似股清单
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            const enabled: Array<1 | 3 | 5 | 6 | 7> = [
-              standards.s1.enabled ? 1 : null,
-              standards.s3.enabled ? 3 : null,
-              standards.s5.enabled ? 5 : null,
-              standards.s6.enabled ? 6 : null,
-              standards.s7.enabled && s7Keywords.length ? 7 : null,
-            ].filter((x): x is 1 | 3 | 5 | 6 | 7 => x !== null)
-
-            const input: ScreenerInput = {
-              top: 10,
-              anchorDate: anchorDate ?? undefined,
-              enabled,
-              s1MaxMarketCapYi: standards.s1.maxMarketCapYi,
-              s3LastDays: standards.s3.lastDays,
-              s3ChangePct: standards.s3.changePct,
-              s3VolumeMultiple: standards.s3.volumeMultiple,
-              s5LookbackDays: standards.s5.lookbackDays,
-              s7Keywords,
-              s7Strict,
-            }
-            const key = JSON.stringify({ kind: 'screener', input })
-            setRequest({ kind: 'screener', input, key })
-          }}
-          className="inline-flex items-center justify-center rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-900"
-        >
-          纯筛选选股
+          按所选标准选股
         </button>
       </div>
 
-      {data && similarLast?.key !== currentPlannedKey ? (
+      {data && similarLast?.key !== currentPlanned.key ? (
         <div className="mt-2 text-xs text-slate-500">当前参数已变更；列表为上次计算结果</div>
       ) : null}
 
@@ -561,9 +457,24 @@ export default function SimilarStocksPanel(props: {
                   <button
                     type="button"
                     onClick={() => {
+                      try {
+                        const symbols = (data?.top ?? [])
+                          .map((x) => String(x.symbol ?? '').toUpperCase())
+                          .filter((x) => /^\d{6}$/.test(x))
+                        window.localStorage.setItem(
+                          'similar_nav:v1',
+                          JSON.stringify({
+                            seed: String(compareSymbol).toUpperCase(),
+                            symbols,
+                            atISO: new Date().toISOString(),
+                          }),
+                        )
+                      } catch {
+                        void 0
+                      }
                       const qs = new URLSearchParams()
                       qs.set('nav', 'similar')
-                      qs.set('seed', lastMode === 'screener' ? 'SCREENER' : String(compareSymbol).toUpperCase())
+                      qs.set('seed', String(compareSymbol).toUpperCase())
                       navigate(`/stocks/${encodeURIComponent(it.symbol)}?${qs.toString()}`)
                     }}
                     className="min-w-0 flex-1 text-left hover:opacity-95"
@@ -646,7 +557,7 @@ export default function SimilarStocksPanel(props: {
         ) : (
           <div className="space-y-1 text-sm text-slate-400">
             <div>暂无结果</div>
-            {lastMode === 'similar' && standards.s2.enabled && standards.s2.minSimilarity >= 0.8 ? (
+            {standards.s2.enabled && standards.s2.minSimilarity >= 0.8 ? (
               <div className="text-xs text-slate-500">标准2阈值偏高；可先把相似度降到 60%~70% 试试</div>
             ) : null}
             {standards.s1.enabled || standards.s3.enabled ? (

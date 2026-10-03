@@ -114,6 +114,21 @@ export default function StockDetail() {
     }
   }, [boardNavKey, navMode])
 
+  const similarNavSymbols = useMemo(() => {
+    if (navMode !== 'similar') return []
+    try {
+      const raw = window.localStorage.getItem('similar_nav:v1')
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as { seed?: unknown; symbols?: unknown }
+      const seed = String(parsed?.seed ?? '').trim().toUpperCase()
+      if (!/^\d{6}$/.test(seed) || seed !== navSimilarSeed) return []
+      const symbols = Array.isArray(parsed?.symbols) ? parsed.symbols : []
+      return symbols.map((x) => String(x).toUpperCase()).filter((x) => /^\d{6}$/.test(x))
+    } catch {
+      return []
+    }
+  }, [navMode, navSimilarSeed])
+
   const selectedSymbol = useStockStore((s) => s.selectedSymbol)
   const watchlist = useStockStore((s) => s.watchlist)
   const blacklist = useStockStore((s) => s.blacklist)
@@ -363,6 +378,17 @@ export default function StockDetail() {
   const inLifelineContext = navMode === 'lifeline'
   const canBoardNav = inBoardContext && boardNavIndex >= 0
 
+  const similarNavIndex = useMemo(() => {
+    if (!similarNavSymbols.length || !routeSymbol) return -1
+    return similarNavSymbols.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
+  }, [routeSymbol, similarNavSymbols])
+
+  const similarHasPrev = similarNavIndex > 0
+  const similarHasNext = similarNavIndex >= 0 && similarNavIndex < similarNavSymbols.length - 1
+  const similarPrevSymbol = similarHasPrev ? similarNavSymbols[similarNavIndex - 1] : null
+  const similarNextSymbol = similarHasNext ? similarNavSymbols[similarNavIndex + 1] : null
+  const canSimilarNav = inSimilarContext && similarNavIndex >= 0
+
   const lifelineNavIndex = useMemo(() => {
     if (!lifelineNavSymbols.length || !routeSymbol) return -1
     return lifelineNavSymbols.findIndex((s) => s.toUpperCase() === routeSymbol.toUpperCase())
@@ -504,6 +530,45 @@ export default function StockDetail() {
                     className={cn(
                       'rounded-lg border px-3 py-2 text-xs font-semibold',
                       boardHasNext
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    下一只
+                  </button>
+                </>
+              ) : canSimilarNav ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={!similarHasPrev}
+                    onClick={() => {
+                      if (similarPrevSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(similarPrevSymbol)}?${similarNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      similarHasPrev
+                        ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
+                        : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
+                    )}
+                  >
+                    上一只
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!similarHasNext}
+                    onClick={() => {
+                      if (similarNextSymbol) {
+                        setHighlightEventId(null)
+                        navigate(`/stocks/${encodeURIComponent(similarNextSymbol)}?${similarNavSearch}`)
+                      }
+                    }}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-xs font-semibold',
+                      similarHasNext
                         ? 'border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800'
                         : 'cursor-not-allowed border-slate-900 bg-slate-950 text-slate-600',
                     )}
