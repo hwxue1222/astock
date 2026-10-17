@@ -80,7 +80,7 @@ export const useStockStore = create<StockState>()(
   persist(
     (set, get) => ({
       selectedSymbol: null,
-      standardSymbol: '002829',
+      standardSymbol: null,
       similarAnchorDate: null,
       watchlist: ['600519', '000001', '300750', '688790', '688561', '601222', '600035', '600479', '600278', '600095', '603587', '603100', '688365', '688716', '688095', '603822', '688269', '605277', '600999', '601162', '605339', '603559', '688680', '603600', '600133', '688798', '688209', '601515', '600621'],
       blacklist: [],
@@ -242,10 +242,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 25,
+      version: 26,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 25) return persisted
+        if (version >= 26) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -258,8 +258,6 @@ export const useStockStore = create<StockState>()(
           : []
         const selectedSymbolRaw = p.selectedSymbol ? String(p.selectedSymbol).toUpperCase() : null
         const selectedSymbol = selectedSymbolRaw && isAshareCode(selectedSymbolRaw) ? selectedSymbolRaw : null
-        const standardSymbolRaw = p.standardSymbol ? String(p.standardSymbol).toUpperCase() : null
-        const standardSymbol = standardSymbolRaw && isAshareCode(standardSymbolRaw) ? standardSymbolRaw : '002829'
         const similarAnchorDateRaw = (p as { similarAnchorDate?: unknown }).similarAnchorDate
         const similarAnchorDate =
           typeof similarAnchorDateRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(similarAnchorDateRaw.trim())
@@ -268,7 +266,7 @@ export const useStockStore = create<StockState>()(
         return {
           ...p,
           selectedSymbol,
-          standardSymbol,
+          standardSymbol: null,
           similarAnchorDate,
           watchlist: watchlist.length ? watchlist : ['600519', '000001', '300750', '688790', '688561', '601222', '600035', '600479', '600278', '600095', '603587', '603100', '688365', '688716', '688095', '603822', '688269', '605277', '600999', '601162', '605339', '603559', '688680', '603600', '600133', '688798', '688209', '601515', '600621'],
           blacklist,

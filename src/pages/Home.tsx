@@ -377,7 +377,7 @@ export default function Home() {
         {activeTab === 'similar' && (
           <div className="space-y-4">
             <SimilarStocksPanel
-              targetSymbol={selectedSymbol ?? standardSymbol ?? '002829'}
+              targetSymbol={selectedSymbol ?? '002829'}
               klt={klineKlt}
               fqt={klineFqt}
               days={klineLimit}
