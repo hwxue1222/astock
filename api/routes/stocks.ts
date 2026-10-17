@@ -1149,7 +1149,7 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     return
   }
 
-  const cachePath = cacheFilePath(`mx_intraday_v2_${code}.json`)
+  const cachePath = cacheFilePath(`mx_intraday_v3_${code}.json`)
   const cached = await readJsonCache<{
     symbol: string
     analysisDate: string
@@ -1192,6 +1192,24 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     const hhmm = (ts: string): string => {
       const m = String(ts).match(/(\d{2}:\d{2})$/)
       return m ? m[1] : String(ts)
+    }
+    const summarizeSegments = (items: typeof bars, segmentCount: number): string => {
+      if (!items.length) return '无'
+      const size = Math.max(1, Math.ceil(items.length / Math.max(1, segmentCount)))
+      const parts: string[] = []
+      for (let i = 0; i < items.length; i += size) {
+        const chunk = items.slice(i, i + size)
+        if (!chunk.length) continue
+        const first = chunk[0]
+        const last = chunk[chunk.length - 1]
+        const high = Math.max(...chunk.map((row) => row.high))
+        const low = Math.min(...chunk.map((row) => row.low))
+        const volumeAvg = avg(chunk.map((row) => row.volume))
+        parts.push(
+          `${hhmm(first.ts)}-${hhmm(last.ts)} C${first.close.toFixed(2)}->${last.close.toFixed(2)} H${high.toFixed(2)} L${low.toFixed(2)} V均${Math.round(volumeAvg)}`,
+        )
+      }
+      return parts.join('; ')
     }
     const findMaxBy = <T,>(items: T[], pick: (item: T) => number): T | null => {
       let best: T | null = null
@@ -1243,12 +1261,18 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     const avgVolumeMorning = avg(morningBars.map((row) => row.volume))
     const avgVolumeAfternoon = avg(afternoonBars.map((row) => row.volume))
     const last30Bars = bars.slice(-30)
-    const timelineSummary = bars
-      .map((row) => `${hhmm(row.ts)} C${row.close.toFixed(2)} A${(row.avgPrice ?? row.close).toFixed(2)} V${Math.round(row.volume)}`)
-      .join('; ')
-    const last30Summary = last30Bars
-      .map((row) => `${hhmm(row.ts)} C${row.close.toFixed(2)} A${(row.avgPrice ?? row.close).toFixed(2)} V${Math.round(row.volume)}`)
-      .join('; ')
+    const morningTrendSummary = summarizeSegments(morningBars, 4)
+    const afternoonTrendSummary = summarizeSegments(afternoonBars, 4)
+    const tailTrendSummary = summarizeSegments(last30Bars, 5)
+    const keyMoments = [
+      `开盘首分钟 ${hhmm(openBar.ts)} O${openBar.open.toFixed(2)} C${openBar.close.toFixed(2)} L${openBar.low.toFixed(2)} V${Math.round(openBar.volume)}`,
+      `上午高点 ${hhmm(morningHighBar.ts)} H${morningHighBar.high.toFixed(2)} C${morningHighBar.close.toFixed(2)} A${(morningHighBar.avgPrice ?? morningHighBar.close).toFixed(2)} V${Math.round(morningHighBar.volume)}`,
+      `全天最大量 ${hhmm(maxVolBar.ts)} C${maxVolBar.close.toFixed(2)} V${Math.round(maxVolBar.volume)}`,
+      maxVolAfterTwoBar
+        ? `14点后最大量 ${hhmm(maxVolAfterTwoBar.ts)} C${maxVolAfterTwoBar.close.toFixed(2)} V${Math.round(maxVolAfterTwoBar.volume)}`
+        : '14点后最大量 无',
+      `收盘分钟 ${hhmm(lastBar.ts)} C${lastBar.close.toFixed(2)} A${(lastBar.avgPrice ?? lastBar.close).toFixed(2)} V${Math.round(lastBar.volume)}`,
+    ].join('; ')
 
     const prompt = [
       `请只分析 A 股 ${code} ${name} 在 ${analysisDate} 这个交易日的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
@@ -1258,9 +1282,10 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
       `冲高回落结构：开盘到高点涨幅=${openToHighPct.toFixed(2)}%，高点回落到收盘=${highToClosePct.toFixed(2)}%，午后首根价格=${noonOpenBar.close.toFixed(2)}，午后到收盘变化=${noonToClosePct.toFixed(2)}%。`,
       `均价线与强弱：收盘相对全天均价=${closeVsAvgPct.toFixed(2)}%，上午在均价线上方分钟占比=${morningAboveAvgPct.toFixed(2)}%，下午在均价线上方分钟占比=${afternoonAboveAvgPct.toFixed(2)}%。`,
       `量能结构：全天最大分钟量=${Math.round(maxVolBar.volume)}@${hhmm(maxVolBar.ts)}，14:00后最大分钟量=${Math.round(maxVolAfterTwoBar?.volume ?? 0)}@${maxVolAfterTwoBar ? hhmm(maxVolAfterTwoBar.ts) : '无'}，上午均量=${Math.round(avgVolumeMorning)}，下午均量=${Math.round(avgVolumeAfternoon)}。`,
-      `上午高点细节：${hhmm(morningHighBar.ts)} 触及 ${morningHighBar.high.toFixed(2)}，该分钟收=${morningHighBar.close.toFixed(2)}，均价=${(morningHighBar.avgPrice ?? morningHighBar.close).toFixed(2)}。`,
-      `全天分时序列：${timelineSummary}。`,
-      `尾盘30分钟序列：${last30Summary}。`,
+      `关键分钟：${keyMoments}。`,
+      `上午分段摘要：${morningTrendSummary}。`,
+      `下午分段摘要：${afternoonTrendSummary}。`,
+      `尾盘30分钟摘要：${tailTrendSummary}。`,
       '输出格式固定为6行：',
       '1. 分时结论：1句话判断是试盘、承接、兑现、出货、回封失败还是转强确认',
       '2. 细节1：抓最关键的第一次试盘/冲高/回落细节，点出具体时间和价位',
