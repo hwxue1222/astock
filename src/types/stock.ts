@@ -214,6 +214,12 @@ export interface StockMxMainForceResponse {
   source: 'dongcai_mx'
 }
 
+export interface StockMxIntradayResponse {
+  symbol: string
+  report: string
+  source: 'dongcai_mx_intraday'
+}
+
 export type IndustryRotationForecastItem = {
   name: string
   category?: string

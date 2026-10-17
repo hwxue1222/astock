@@ -7,7 +7,17 @@ import RumorsPanel from '@/components/RumorsPanel'
 import RiskSummary from '@/components/RiskSummary'
 import TopBar from '@/components/TopBar'
 import { formatIsoToLocal } from '@/lib/format'
-import { getEvents, getQuote, getRatios, getRiskSignals, getUniverse, getIndustryMoneyflow, getSurvey } from '@/lib/stockApi'
+import {
+  getEvents,
+  getIndustryMoneyflow,
+  getMxIntradayAnalysis,
+  getMxMainForceAnalysis,
+  getQuote,
+  getRatios,
+  getRiskSignals,
+  getSurvey,
+  getUniverse,
+} from '@/lib/stockApi'
 import { useStockStore } from '@/stores/stockStore'
 import { cn } from '@/lib/utils'
 import type {
@@ -17,6 +27,8 @@ import type {
   StockRatiosResponse,
   IndustryMoneyflowItem,
 } from '@/types/stock'
+
+const KIMI_LOOKBACK_DAYS = 5
 
 function isStateOwned(controllerType?: string, controller?: string): boolean {
   if (!controllerType && !controller) return false
@@ -173,6 +185,16 @@ export default function StockDetail() {
   const [ratiosError, setRatiosError] = useState<string | null>(null)
 
   const [highlightEventId, setHighlightEventId] = useState<string | null>(null)
+  const [mxLoading, setMxLoading] = useState(false)
+  const [mxSlow, setMxSlow] = useState(false)
+  const [mxReport, setMxReport] = useState<string | null>(null)
+  const [mxError, setMxError] = useState<string | null>(null)
+  const [mxExpanded, setMxExpanded] = useState(false)
+  const [mxIntradayLoading, setMxIntradayLoading] = useState(false)
+  const [mxIntradaySlow, setMxIntradaySlow] = useState(false)
+  const [mxIntradayReport, setMxIntradayReport] = useState<string | null>(null)
+  const [mxIntradayError, setMxIntradayError] = useState<string | null>(null)
+  const [mxIntradayExpanded, setMxIntradayExpanded] = useState(false)
 
   // 保存进入页面时的自选股快照（取消自选后翻页仍可用）
   const watchlistSnapshotRef = useRef<string[]>([])
@@ -213,6 +235,19 @@ export default function StockDetail() {
     if (!routeSymbol) return
     if (selectedSymbol !== routeSymbol) setSelectedSymbol(routeSymbol)
   }, [routeSymbol, selectedSymbol, setSelectedSymbol])
+
+  useEffect(() => {
+    setMxLoading(false)
+    setMxSlow(false)
+    setMxReport(null)
+    setMxError(null)
+    setMxExpanded(false)
+    setMxIntradayLoading(false)
+    setMxIntradaySlow(false)
+    setMxIntradayReport(null)
+    setMxIntradayError(null)
+    setMxIntradayExpanded(false)
+  }, [routeSymbol])
 
   // 获取行业资金流向（用于行业标签颜色）
   useEffect(() => {
@@ -309,6 +344,40 @@ export default function StockDetail() {
     const raw = signals?.updatedAt
     return raw ? formatIsoToLocal(raw) : null
   }, [signals?.updatedAt])
+
+  const loadMxReport = async () => {
+    setMxLoading(true)
+    setMxSlow(false)
+    setMxError(null)
+    const slowTimer = window.setTimeout(() => setMxSlow(true), 8000)
+    try {
+      const out = await getMxMainForceAnalysis(routeSymbol, { lookbackDays: KIMI_LOOKBACK_DAYS })
+      setMxReport(out.report)
+    } catch (e: unknown) {
+      setMxError(e instanceof Error ? e.message : 'Kimi 解读失败')
+    } finally {
+      window.clearTimeout(slowTimer)
+      setMxLoading(false)
+      setMxSlow(false)
+    }
+  }
+
+  const loadMxIntradayReport = async () => {
+    setMxIntradayLoading(true)
+    setMxIntradaySlow(false)
+    setMxIntradayError(null)
+    const slowTimer = window.setTimeout(() => setMxIntradaySlow(true), 8000)
+    try {
+      const out = await getMxIntradayAnalysis(routeSymbol)
+      setMxIntradayReport(out.report)
+    } catch (e: unknown) {
+      setMxIntradayError(e instanceof Error ? e.message : 'Kimi 分时解读失败')
+    } finally {
+      window.clearTimeout(slowTimer)
+      setMxIntradayLoading(false)
+      setMxIntradaySlow(false)
+    }
+  }
 
   const selectedMeta = useMemo(() => {
     const sym = routeSymbol
@@ -685,6 +754,88 @@ export default function StockDetail() {
 
         <div className="grid gap-4 lg:grid-cols-[1fr,360px]">
           <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={mxLoading}
+                  onClick={async () => {
+                    if (mxLoading) return
+                    if (mxReport) {
+                      setMxExpanded((prev) => !prev)
+                      return
+                    }
+                    setMxExpanded(true)
+                    await loadMxReport()
+                  }}
+                  className="rounded-lg border border-violet-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {mxLoading
+                    ? mxSlow
+                      ? 'KIMI分析中(约20~60秒)…'
+                      : 'KIMI分析中…'
+                    : mxReport
+                      ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析')
+                      : 'KIMI分析'}
+                </button>
+                <button
+                  type="button"
+                  disabled={mxIntradayLoading}
+                  onClick={async () => {
+                    if (mxIntradayLoading) return
+                    if (mxIntradayReport) {
+                      setMxIntradayExpanded((prev) => !prev)
+                      return
+                    }
+                    setMxIntradayExpanded(true)
+                    await loadMxIntradayReport()
+                  }}
+                  className="rounded-lg border border-cyan-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {mxIntradayLoading
+                    ? mxIntradaySlow
+                      ? 'KIMI分时分析中(约20~60秒)…'
+                      : 'KIMI分时分析中…'
+                    : mxIntradayReport
+                      ? (mxIntradayExpanded ? '收起KIMI分时分析' : '查看KIMI分时分析')
+                      : 'KIMI分时分析'}
+                </button>
+              </div>
+              {mxExpanded ? (
+                <div className="mt-3 rounded-lg border border-violet-900/70 bg-violet-950/20 px-3 py-2">
+                  {mxReport ? (
+                    <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxReport}</div>
+                  ) : mxError ? (
+                    <div className="text-[11px] text-amber-300">{mxError}</div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400">
+                      {mxLoading
+                        ? mxSlow
+                          ? 'Kimi 正在做更细的日线结构分析，通常需要 20~60 秒，请勿重复点击。'
+                          : 'Kimi分析中…'
+                        : '点击生成解读'}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              {mxIntradayExpanded ? (
+                <div className="mt-3 rounded-lg border border-cyan-900/70 bg-cyan-950/20 px-3 py-2">
+                  {mxIntradayReport ? (
+                    <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxIntradayReport}</div>
+                  ) : mxIntradayError ? (
+                    <div className="text-[11px] text-amber-300">{mxIntradayError}</div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400">
+                      {mxIntradayLoading
+                        ? mxIntradaySlow
+                          ? 'Kimi 正在做分时结构分析，通常需要 20~60 秒，请勿重复点击。'
+                          : 'Kimi分时分析中…'
+                        : '点击生成分时解读'}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
             <KlinePanel
               symbol={routeSymbol}
               klt={klineKlt}

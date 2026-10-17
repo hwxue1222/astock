@@ -14,6 +14,7 @@ import {
   getEastmoneyRegionalComposition,
 } from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
+import { getEastmoneyTrend } from '../providers/eastmoneyTrend.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
 import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getRumorsOverview } from '../domain/rumors.js'
@@ -1131,6 +1132,142 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
     res.status(502).json({
       success: false,
       error: '妙想主力解读异常',
+      detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+    })
+  }
+})
+
+router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.params.symbol ?? '').trim()
+  const code = normalizeAshareCode(symbol)
+  if (!code) {
+    res.status(400).json({ success: false, error: 'Missing symbol' })
+    return
+  }
+  if (!isMxAvailable()) {
+    res.status(503).json({ success: false, error: '妙想数据源不可用（缺少 KIMI_API_KEY）' })
+    return
+  }
+
+  const cachePath = cacheFilePath(`mx_intraday_v1_${code}.json`)
+  const cached = await readJsonCache<{ symbol: string; report: string; source: 'dongcai_mx_intraday' }>(cachePath, {
+    ttlSeconds: 10 * 60,
+  })
+  if (cached?.report) {
+    res.status(200).json({ success: true, ...cached })
+    return
+  }
+
+  try {
+    const [quote, trend] = await Promise.all([
+      getEastmoneyQuote({ code, timeoutMs: 8_000 }).catch(() => null),
+      getEastmoneyTrend({ code, ndays: 1, timeoutMs: 12_000 }).catch(() => ({ bars: [], source: '' })),
+    ])
+
+    const bars = (trend.bars ?? []).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.volume))
+    if (bars.length < 30) {
+      res.status(502).json({ success: false, error: '分时数据不足' })
+      return
+    }
+
+    const avg = (vals: number[]): number => (vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 0)
+    const hhmm = (ts: string): string => {
+      const m = String(ts).match(/(\d{2}:\d{2})$/)
+      return m ? m[1] : String(ts)
+    }
+    const findMaxBy = <T,>(items: T[], pick: (item: T) => number): T | null => {
+      let best: T | null = null
+      let bestVal = Number.NEGATIVE_INFINITY
+      for (const item of items) {
+        const v = pick(item)
+        if (Number.isFinite(v) && v > bestVal) {
+          best = item
+          bestVal = v
+        }
+      }
+      return best
+    }
+    const findMinBy = <T,>(items: T[], pick: (item: T) => number): T | null => {
+      let best: T | null = null
+      let bestVal = Number.POSITIVE_INFINITY
+      for (const item of items) {
+        const v = pick(item)
+        if (Number.isFinite(v) && v < bestVal) {
+          best = item
+          bestVal = v
+        }
+      }
+      return best
+    }
+
+    const name = quote?.name?.trim() || code
+    const openBar = bars[0]
+    const lastBar = bars[bars.length - 1]
+    const morningBars = bars.filter((row) => hhmm(row.ts) <= '11:30')
+    const afternoonBars = bars.filter((row) => hhmm(row.ts) >= '13:00')
+    const afterTwoBars = bars.filter((row) => hhmm(row.ts) >= '14:00')
+    const morningHighBar = findMaxBy(morningBars.length ? morningBars : bars, (row) => row.high) ?? lastBar
+    const dayHighBar = findMaxBy(bars, (row) => row.high) ?? lastBar
+    const dayLowBar = findMinBy(bars, (row) => row.low) ?? openBar
+    const maxVolBar = findMaxBy(bars, (row) => row.volume) ?? lastBar
+    const maxVolAfterTwoBar = findMaxBy(afterTwoBars.length ? afterTwoBars : afternoonBars, (row) => row.volume)
+    const noonOpenBar = afternoonBars[0] ?? lastBar
+    const closeAvgPrice = lastBar.avgPrice ?? avg(bars.map((row) => row.close))
+    const closeVsAvgPct = closeAvgPrice > 0 ? ((lastBar.close / closeAvgPrice) - 1) * 100 : 0
+    const morningAboveAvgCount = morningBars.filter((row) => (row.avgPrice ?? row.close) <= row.close).length
+    const afternoonAboveAvgCount = afternoonBars.filter((row) => (row.avgPrice ?? row.close) <= row.close).length
+    const morningAboveAvgPct = morningBars.length ? (morningAboveAvgCount / morningBars.length) * 100 : 0
+    const afternoonAboveAvgPct = afternoonBars.length ? (afternoonAboveAvgCount / afternoonBars.length) * 100 : 0
+    const openToHighPct = openBar.open > 0 ? ((dayHighBar.high / openBar.open) - 1) * 100 : 0
+    const highToClosePct = dayHighBar.high > 0 ? ((lastBar.close / dayHighBar.high) - 1) * 100 : 0
+    const noonToClosePct = noonOpenBar.close > 0 ? ((lastBar.close / noonOpenBar.close) - 1) * 100 : 0
+    const openToClosePct = openBar.open > 0 ? ((lastBar.close / openBar.open) - 1) * 100 : 0
+    const avgVolumeMorning = avg(morningBars.map((row) => row.volume))
+    const avgVolumeAfternoon = avg(afternoonBars.map((row) => row.volume))
+    const last30Bars = bars.slice(-30)
+    const timelineSummary = bars
+      .map((row) => `${hhmm(row.ts)} C${row.close.toFixed(2)} A${(row.avgPrice ?? row.close).toFixed(2)} V${Math.round(row.volume)}`)
+      .join('; ')
+    const last30Summary = last30Bars
+      .map((row) => `${hhmm(row.ts)} C${row.close.toFixed(2)} A${(row.avgPrice ?? row.close).toFixed(2)} V${Math.round(row.volume)}`)
+      .join('; ')
+
+    const prompt = [
+      `请只分析 A 股 ${code} ${name} 当天的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
+      '请像短线复盘一样，先从分时里拆出最重要的3个细节，再合起来定性，最后给下一交易日剧本和风控位。',
+      `开盘到收盘关键统计：开盘=${openBar.open.toFixed(2)}，收盘=${lastBar.close.toFixed(2)}，全天涨跌=${openToClosePct.toFixed(2)}%，全天最高=${dayHighBar.high.toFixed(2)}@${hhmm(dayHighBar.ts)}，全天最低=${dayLowBar.low.toFixed(2)}@${hhmm(dayLowBar.ts)}。`,
+      `冲高回落结构：开盘到高点涨幅=${openToHighPct.toFixed(2)}%，高点回落到收盘=${highToClosePct.toFixed(2)}%，午后首根价格=${noonOpenBar.close.toFixed(2)}，午后到收盘变化=${noonToClosePct.toFixed(2)}%。`,
+      `均价线与强弱：收盘相对全天均价=${closeVsAvgPct.toFixed(2)}%，上午在均价线上方分钟占比=${morningAboveAvgPct.toFixed(2)}%，下午在均价线上方分钟占比=${afternoonAboveAvgPct.toFixed(2)}%。`,
+      `量能结构：全天最大分钟量=${Math.round(maxVolBar.volume)}@${hhmm(maxVolBar.ts)}，14:00后最大分钟量=${Math.round(maxVolAfterTwoBar?.volume ?? 0)}@${maxVolAfterTwoBar ? hhmm(maxVolAfterTwoBar.ts) : '无'}，上午均量=${Math.round(avgVolumeMorning)}，下午均量=${Math.round(avgVolumeAfternoon)}。`,
+      `上午高点细节：${hhmm(morningHighBar.ts)} 触及 ${morningHighBar.high.toFixed(2)}，该分钟收=${morningHighBar.close.toFixed(2)}，均价=${(morningHighBar.avgPrice ?? morningHighBar.close).toFixed(2)}。`,
+      `全天分时序列：${timelineSummary}。`,
+      `尾盘30分钟序列：${last30Summary}。`,
+      '输出格式固定为6行：',
+      '1. 分时结论：1句话判断是试盘、承接、兑现、出货、回封失败还是转强确认',
+      '2. 细节1：抓最关键的第一次试盘/冲高/回落细节，点出具体时间和价位',
+      '3. 细节2：抓量能最大的关键分钟或14点后的动作，说明是承接还是兑现',
+      '4. 细节3：结合均价线和尾盘，说明全天筹码主动性偏买还是偏卖',
+      '5. 明日剧本：给出强、弱两种剧本，明确什么走势算确认转强，什么走势算继续走弱',
+      '6. 关键价位与风控：给出短线支撑、压力、失效位和一句风险提示',
+    ].join('\n')
+
+    const out = await mxStockDiagnosis(prompt)
+    if (!out?.preview) {
+      res.status(502).json({ success: false, error: '妙想分时解读失败' })
+      return
+    }
+
+    const payload = {
+      symbol: code,
+      report: out.preview,
+      source: 'dongcai_mx_intraday' as const,
+    }
+    await writeJsonCache(cachePath, payload)
+    res.status(200).json({ success: true, ...payload })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: '妙想分时解读异常',
       detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
     })
   }

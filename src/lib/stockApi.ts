@@ -20,9 +20,11 @@ import type {
   BoardFlowRollingResponse,
   BoardConstituentsResponse,
   StockMxMainForceResponse,
+  StockMxIntradayResponse,
 } from '@/types/stock'
 
 const mxMainForceInflight = new Map<string, Promise<StockMxMainForceResponse>>()
+const mxIntradayInflight = new Map<string, Promise<StockMxIntradayResponse>>()
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal })
@@ -128,6 +130,26 @@ export async function getMxMainForceAnalysis(
     mxMainForceInflight.delete(key)
   })
   mxMainForceInflight.set(key, pending)
+  return pending
+}
+
+export async function getMxIntradayAnalysis(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<StockMxIntradayResponse> {
+  const url = `/api/stocks/${encodeURIComponent(symbol)}/mx/intraday`
+  if (signal) {
+    return fetchJson<{ success: boolean } & StockMxIntradayResponse>(url, signal)
+  }
+
+  const key = String(symbol).toUpperCase()
+  const existing = mxIntradayInflight.get(key)
+  if (existing) return existing
+
+  const pending = fetchJson<{ success: boolean } & StockMxIntradayResponse>(url).finally(() => {
+    mxIntradayInflight.delete(key)
+  })
+  mxIntradayInflight.set(key, pending)
   return pending
 }
 

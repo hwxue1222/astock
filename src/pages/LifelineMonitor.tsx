@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import TopBar from '@/components/TopBar'
 import { useStockStore } from '@/stores/stockStore'
 import { cn } from '@/lib/utils'
-import { getMxMainForceAnalysis } from '@/lib/stockApi'
+import { getMxIntradayAnalysis, getMxMainForceAnalysis } from '@/lib/stockApi'
 import type { KlineCandle } from '@/types/stock'
 
 type Candidate = {
@@ -117,6 +117,11 @@ export default function LifelineMonitor() {
   const [mxReportBySymbol, setMxReportBySymbol] = useState<Record<string, string>>({})
   const [mxErrorBySymbol, setMxErrorBySymbol] = useState<Record<string, string>>({})
   const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradayLoadingBySymbol, setMxIntradayLoadingBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradaySlowBySymbol, setMxIntradaySlowBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradayReportBySymbol, setMxIntradayReportBySymbol] = useState<Record<string, string>>({})
+  const [mxIntradayErrorBySymbol, setMxIntradayErrorBySymbol] = useState<Record<string, string>>({})
+  const [mxIntradayExpandedBySymbol, setMxIntradayExpandedBySymbol] = useState<Record<string, boolean>>({})
 
   const abortRef = useRef(false)
 
@@ -144,6 +149,11 @@ export default function LifelineMonitor() {
     setMxReportBySymbol({})
     setMxErrorBySymbol({})
     setMxExpandedBySymbol({})
+    setMxIntradayLoadingBySymbol({})
+    setMxIntradaySlowBySymbol({})
+    setMxIntradayReportBySymbol({})
+    setMxIntradayErrorBySymbol({})
+    setMxIntradayExpandedBySymbol({})
   }, [stocks])
 
   const saveToCache = useCallback((data: LifelineStock[]) => {
@@ -304,6 +314,33 @@ export default function LifelineMonitor() {
     }
   }
 
+  const loadMxIntradayReport = async (symbol: string) => {
+    const symUpper = symbol.toUpperCase()
+    setMxIntradayLoadingBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    setMxIntradayErrorBySymbol((prev) => {
+      const next = { ...prev }
+      delete next[symUpper]
+      return next
+    })
+    const slowTimer = window.setTimeout(() => {
+      setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    }, 8000)
+    try {
+      const out = await getMxIntradayAnalysis(symbol)
+      setMxIntradayReportBySymbol((prev) => ({ ...prev, [symUpper]: out.report }))
+    } catch (e: unknown) {
+      setMxIntradayErrorBySymbol((prev) => ({
+        ...prev,
+        [symUpper]: e instanceof Error ? e.message : 'Kimi 分时解读失败',
+      }))
+    } finally {
+      window.clearTimeout(slowTimer)
+      setMxIntradayLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+      setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    }
+  }
+
   const progressPct = scanState.total > 0 ? Math.round((scanState.processed / scanState.total) * 100) : 0
 
   return (
@@ -423,6 +460,11 @@ export default function LifelineMonitor() {
                     const mxReport = mxReportBySymbol[symbol]
                     const mxError = mxErrorBySymbol[symbol]
                     const mxExpanded = !!mxExpandedBySymbol[symbol]
+                    const mxIntradayLoading = !!mxIntradayLoadingBySymbol[symbol]
+                    const mxIntradaySlow = !!mxIntradaySlowBySymbol[symbol]
+                    const mxIntradayReport = mxIntradayReportBySymbol[symbol]
+                    const mxIntradayError = mxIntradayErrorBySymbol[symbol]
+                    const mxIntradayExpanded = !!mxIntradayExpandedBySymbol[symbol]
                     return (
                     <Fragment key={s.code}>
                     <tr className="border-t border-slate-800 hover:bg-slate-900/40">
@@ -501,6 +543,28 @@ export default function LifelineMonitor() {
                                 ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析')
                                 : 'KIMI分析'}
                           </button>
+                          <button
+                            type="button"
+                            disabled={mxIntradayLoading}
+                            onClick={async () => {
+                              if (mxIntradayLoading) return
+                              if (mxIntradayReport) {
+                                setMxIntradayExpandedBySymbol((prev) => ({ ...prev, [symbol]: !mxIntradayExpanded }))
+                                return
+                              }
+                              setMxIntradayExpandedBySymbol((prev) => ({ ...prev, [symbol]: true }))
+                              await loadMxIntradayReport(symbol)
+                            }}
+                            className="rounded-lg border border-cyan-900 bg-slate-900 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {mxIntradayLoading
+                              ? mxIntradaySlow
+                                ? 'KIMI分时分析中(约20~60秒)…'
+                                : 'KIMI分时分析中…'
+                              : mxIntradayReport
+                                ? (mxIntradayExpanded ? '收起KIMI分时分析' : '查看KIMI分时分析')
+                                : 'KIMI分时分析'}
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -519,6 +583,27 @@ export default function LifelineMonitor() {
                                     ? 'Kimi 正在做更细的日线结构分析，通常需要 20~60 秒，请勿重复点击。'
                                     : 'Kimi分析中…'
                                   : '点击生成解读'}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    {mxIntradayExpanded ? (
+                      <tr className="border-t border-slate-900/80 bg-cyan-950/10">
+                        <td className="px-4 py-3" colSpan={9}>
+                          <div className="rounded-lg border border-cyan-900/70 bg-cyan-950/20 px-3 py-2">
+                            {mxIntradayReport ? (
+                              <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxIntradayReport}</div>
+                            ) : mxIntradayError ? (
+                              <div className="text-[11px] text-amber-300">{mxIntradayError}</div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400">
+                                {mxIntradayLoading
+                                  ? mxIntradaySlow
+                                    ? 'Kimi 正在做分时结构分析，通常需要 20~60 秒，请勿重复点击。'
+                                    : 'Kimi分时分析中…'
+                                  : '点击生成分时解读'}
                               </div>
                             )}
                           </div>

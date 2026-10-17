@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIndustryMoneyflow, getMxMainForceAnalysis, getQuotes, getSimilarStocks } from '@/lib/stockApi'
+import { getIndustryMoneyflow, getMxIntradayAnalysis, getMxMainForceAnalysis, getQuotes, getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
@@ -56,6 +56,11 @@ export default function SimilarStocksPanel(props: {
   const [mxReportBySymbol, setMxReportBySymbol] = useState<Record<string, string>>({})
   const [mxErrorBySymbol, setMxErrorBySymbol] = useState<Record<string, string>>({})
   const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradayLoadingBySymbol, setMxIntradayLoadingBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradaySlowBySymbol, setMxIntradaySlowBySymbol] = useState<Record<string, boolean>>({})
+  const [mxIntradayReportBySymbol, setMxIntradayReportBySymbol] = useState<Record<string, string>>({})
+  const [mxIntradayErrorBySymbol, setMxIntradayErrorBySymbol] = useState<Record<string, string>>({})
+  const [mxIntradayExpandedBySymbol, setMxIntradayExpandedBySymbol] = useState<Record<string, boolean>>({})
 
   const currentPlanned = useMemo(() => {
     const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
@@ -144,6 +149,11 @@ export default function SimilarStocksPanel(props: {
     setMxReportBySymbol({})
     setMxErrorBySymbol({})
     setMxExpandedBySymbol({})
+    setMxIntradayLoadingBySymbol({})
+    setMxIntradaySlowBySymbol({})
+    setMxIntradayReportBySymbol({})
+    setMxIntradayErrorBySymbol({})
+    setMxIntradayExpandedBySymbol({})
   }, [data?.target, data?.top])
 
   const loadMxReport = async (symbol: string, lookbackDays: number) => {
@@ -170,6 +180,33 @@ export default function SimilarStocksPanel(props: {
       window.clearTimeout(slowTimer)
       setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
       setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    }
+  }
+
+  const loadMxIntradayReport = async (symbol: string) => {
+    const symUpper = symbol.toUpperCase()
+    setMxIntradayLoadingBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    setMxIntradayErrorBySymbol((prev) => {
+      const next = { ...prev }
+      delete next[symUpper]
+      return next
+    })
+    const slowTimer = window.setTimeout(() => {
+      setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    }, 8000)
+    try {
+      const out = await getMxIntradayAnalysis(symbol)
+      setMxIntradayReportBySymbol((prev) => ({ ...prev, [symUpper]: out.report }))
+    } catch (e: unknown) {
+      setMxIntradayErrorBySymbol((prev) => ({
+        ...prev,
+        [symUpper]: e instanceof Error ? e.message : 'Kimi 分时解读失败',
+      }))
+    } finally {
+      window.clearTimeout(slowTimer)
+      setMxIntradayLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+      setMxIntradaySlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
     }
   }
 
@@ -479,6 +516,11 @@ export default function SimilarStocksPanel(props: {
               const mxReport = mxReportBySymbol[symUpper]
               const mxError = mxErrorBySymbol[symUpper]
               const mxExpanded = !!mxExpandedBySymbol[symUpper]
+              const mxIntradayLoading = !!mxIntradayLoadingBySymbol[symUpper]
+              const mxIntradaySlow = !!mxIntradaySlowBySymbol[symUpper]
+              const mxIntradayReport = mxIntradayReportBySymbol[symUpper]
+              const mxIntradayError = mxIntradayErrorBySymbol[symUpper]
+              const mxIntradayExpanded = !!mxIntradayExpandedBySymbol[symUpper]
 
               return (
                 <div
@@ -603,6 +645,28 @@ export default function SimilarStocksPanel(props: {
                             ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析')
                             : 'KIMI分析'}
                       </button>
+                      <button
+                        type="button"
+                        disabled={mxIntradayLoading}
+                        onClick={async () => {
+                          if (mxIntradayLoading) return
+                          if (mxIntradayReport) {
+                            setMxIntradayExpandedBySymbol((prev) => ({ ...prev, [symUpper]: !mxIntradayExpanded }))
+                            return
+                          }
+                          setMxIntradayExpandedBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+                          await loadMxIntradayReport(it.symbol)
+                        }}
+                        className="rounded-lg border border-cyan-900 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {mxIntradayLoading
+                          ? mxIntradaySlow
+                            ? 'KIMI分时分析中(约20~60秒)…'
+                            : 'KIMI分时分析中…'
+                          : mxIntradayReport
+                            ? (mxIntradayExpanded ? '收起KIMI分时分析' : '查看KIMI分时分析')
+                            : 'KIMI分时分析'}
+                      </button>
                       {watchlistSet.has(symUpper) ? (
                         <div className="text-xs text-slate-500">已在自选</div>
                       ) : (
@@ -629,6 +693,23 @@ export default function SimilarStocksPanel(props: {
                               ? 'Kimi 正在做更细的日线结构分析，通常需要 20~60 秒，请勿重复点击。'
                               : 'Kimi分析中…'
                             : '点击生成解读'}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                  {mxIntradayExpanded ? (
+                    <div className="mt-2 rounded-lg border border-cyan-900/70 bg-cyan-950/20 px-3 py-2">
+                      {mxIntradayReport ? (
+                        <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxIntradayReport}</div>
+                      ) : mxIntradayError ? (
+                        <div className="text-[11px] text-amber-300">{mxIntradayError}</div>
+                      ) : (
+                        <div className="text-[11px] text-slate-400">
+                          {mxIntradayLoading
+                            ? mxIntradaySlow
+                              ? 'Kimi 正在做分时结构分析，通常需要 20~60 秒，请勿重复点击。'
+                              : 'Kimi分时分析中…'
+                            : '点击生成分时解读'}
                         </div>
                       )}
                     </div>
