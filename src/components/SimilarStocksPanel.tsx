@@ -29,9 +29,6 @@ export default function SimilarStocksPanel(props: {
   const setStandard = useStockStore((s) => s.setSimilarStandard)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
   const watchlist = useStockStore((s) => s.watchlist)
-  const standardSymbol = useStockStore((s) => s.standardSymbol)
-  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
-  const clearStandardSymbol = useStockStore((s) => s.clearStandardSymbol)
   const similarAnchorDate = useStockStore((s) => s.similarAnchorDate)
   const setSimilarAnchorDate = useStockStore((s) => s.setSimilarAnchorDate)
   const similarLast = useStockStore((s) => s.similarLast)
@@ -39,14 +36,10 @@ export default function SimilarStocksPanel(props: {
 
   const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
 
-  const [standardDraft, setStandardDraft] = useState<string>(() => String(standardSymbol ?? '').toUpperCase())
-
-  useEffect(() => {
-    setStandardDraft(String(standardSymbol ?? '').toUpperCase())
-  }, [standardSymbol])
+  const [standardDraft, setStandardDraft] = useState<string>('')
 
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
-  const compareSymbol = standardSymbol ?? props.targetSymbol
+  const compareSymbol = standards.s2.enabled && standardDraftCode ? standardDraftCode : props.targetSymbol
   const anchorDate = similarAnchorDate
   const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
   const s7Strict = true
@@ -226,29 +219,10 @@ export default function SimilarStocksPanel(props: {
           <div className="text-xs text-slate-400">对比股票</div>
           <input
             value={standardDraft}
-            onChange={(e) => setStandardDraft(e.target.value)}
+            onChange={(e) => setStandardDraft(e.target.value.toUpperCase())}
             placeholder="输入6位股票代码"
             className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
           />
-          <button
-            type="button"
-            disabled={!standardDraftCode}
-            onClick={() => {
-              if (!standardDraftCode) return
-              setStandardSymbol(standardDraftCode)
-            }}
-            className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-          >
-            设为对比
-          </button>
-          <button
-            type="button"
-            disabled={!standardSymbol}
-            onClick={() => clearStandardSymbol()}
-            className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-          >
-            清除
-          </button>
           <div className="text-xs font-semibold text-slate-100">{compareSymbol}</div>
           <div className="ml-2 text-xs text-slate-400">近</div>
           <input
