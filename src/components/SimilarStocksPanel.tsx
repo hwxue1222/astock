@@ -46,7 +46,7 @@ export default function SimilarStocksPanel(props: {
   }, [standardSymbol])
 
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
-  const compareSymbol = standards.s2.enabled && standardSymbol ? standardSymbol : props.targetSymbol
+  const compareSymbol = standardSymbol ?? props.targetSymbol
   const anchorDate = similarAnchorDate
   const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
   const s7Strict = true
