@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { Fragment, useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '@/components/TopBar'
 import { useStockStore } from '@/stores/stockStore'
 import { cn } from '@/lib/utils'
+import { getMxMainForceAnalysis } from '@/lib/stockApi'
 import type { KlineCandle } from '@/types/stock'
 
 type Candidate = {
@@ -41,6 +42,7 @@ type ScanState = {
 
 const CONCURRENCY = 5
 const KLINE_DAYS = 200
+const KIMI_LOOKBACK_DAYS = 5
 
 function formatVolume(v: number): string {
   if (v >= 100000000) return (v / 100000000).toFixed(1) + '亿'
@@ -110,6 +112,11 @@ export default function LifelineMonitor() {
     currentCode: '',
     error: null,
   })
+  const [mxLoadingBySymbol, setMxLoadingBySymbol] = useState<Record<string, boolean>>({})
+  const [mxSlowBySymbol, setMxSlowBySymbol] = useState<Record<string, boolean>>({})
+  const [mxReportBySymbol, setMxReportBySymbol] = useState<Record<string, string>>({})
+  const [mxErrorBySymbol, setMxErrorBySymbol] = useState<Record<string, string>>({})
+  const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
 
   const abortRef = useRef(false)
 
@@ -130,6 +137,14 @@ export default function LifelineMonitor() {
       setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    setMxLoadingBySymbol({})
+    setMxSlowBySymbol({})
+    setMxReportBySymbol({})
+    setMxErrorBySymbol({})
+    setMxExpandedBySymbol({})
+  }, [stocks])
 
   const saveToCache = useCallback((data: LifelineStock[]) => {
     try {
@@ -262,6 +277,33 @@ export default function LifelineMonitor() {
     return watchlist.map((x) => x.toUpperCase()).includes(code.toUpperCase())
   }
 
+  const loadMxReport = async (symbol: string, lookbackDays: number) => {
+    const symUpper = symbol.toUpperCase()
+    setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    setMxErrorBySymbol((prev) => {
+      const next = { ...prev }
+      delete next[symUpper]
+      return next
+    })
+    const slowTimer = window.setTimeout(() => {
+      setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    }, 8000)
+    try {
+      const out = await getMxMainForceAnalysis(symbol, { lookbackDays })
+      setMxReportBySymbol((prev) => ({ ...prev, [symUpper]: out.report }))
+    } catch (e: unknown) {
+      setMxErrorBySymbol((prev) => ({
+        ...prev,
+        [symUpper]: e instanceof Error ? e.message : 'Kimi 解读失败',
+      }))
+    } finally {
+      window.clearTimeout(slowTimer)
+      setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+      setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    }
+  }
+
   const progressPct = scanState.total > 0 ? Math.round((scanState.processed / scanState.total) * 100) : 0
 
   return (
@@ -374,8 +416,16 @@ export default function LifelineMonitor() {
                     </td>
                   </tr>
                 ) : stocks.length ? (
-                  stocks.map((s, i) => (
-                    <tr key={s.code} className="border-t border-slate-800 hover:bg-slate-900/40">
+                  stocks.map((s, i) => {
+                    const symbol = s.code.toUpperCase()
+                    const mxLoading = !!mxLoadingBySymbol[symbol]
+                    const mxSlow = !!mxSlowBySymbol[symbol]
+                    const mxReport = mxReportBySymbol[symbol]
+                    const mxError = mxErrorBySymbol[symbol]
+                    const mxExpanded = !!mxExpandedBySymbol[symbol]
+                    return (
+                    <Fragment key={s.code}>
+                    <tr className="border-t border-slate-800 hover:bg-slate-900/40">
                       <td className="px-4 py-3 text-slate-400">{i + 1}</td>
                       <td className="px-4 py-3">
                         <div className="text-sm font-semibold text-slate-100">{s.code}</div>
@@ -429,10 +479,54 @@ export default function LifelineMonitor() {
                           >
                             {isInWatchlist(s.code) ? '已加' : '+自选'}
                           </button>
+                          <button
+                            type="button"
+                            disabled={mxLoading}
+                            onClick={async () => {
+                              if (mxLoading) return
+                              if (mxReport) {
+                                setMxExpandedBySymbol((prev) => ({ ...prev, [symbol]: !mxExpanded }))
+                                return
+                              }
+                              setMxExpandedBySymbol((prev) => ({ ...prev, [symbol]: true }))
+                              await loadMxReport(symbol, KIMI_LOOKBACK_DAYS)
+                            }}
+                            className="rounded-lg border border-violet-900 bg-slate-900 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {mxLoading
+                              ? mxSlow
+                                ? 'KIMI分析中(约20~60秒)…'
+                                : 'KIMI分析中…'
+                              : mxReport
+                                ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析')
+                                : 'KIMI分析'}
+                          </button>
                         </div>
                       </td>
                     </tr>
-                  ))
+                    {mxExpanded ? (
+                      <tr className="border-t border-slate-900/80 bg-violet-950/10">
+                        <td className="px-4 py-3" colSpan={9}>
+                          <div className="rounded-lg border border-violet-900/70 bg-violet-950/20 px-3 py-2">
+                            {mxReport ? (
+                              <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxReport}</div>
+                            ) : mxError ? (
+                              <div className="text-[11px] text-amber-300">{mxError}</div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400">
+                                {mxLoading
+                                  ? mxSlow
+                                    ? 'Kimi 正在做更细的日线结构分析，通常需要 20~60 秒，请勿重复点击。'
+                                    : 'Kimi分析中…'
+                                  : '点击生成解读'}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                    </Fragment>
+                  )})
                 ) : (
                   <tr>
                     <td className="px-4 py-4 text-slate-400" colSpan={9}>

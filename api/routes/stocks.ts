@@ -1024,7 +1024,7 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
   }
 
   const lookbackDays = Math.max(5, Math.min(20, Math.floor(Number(req.query.lookbackDays ?? 5) || 5)))
-  const cachePath = cacheFilePath(`mx_main_force_v2_${code}_d${lookbackDays}.json`)
+  const cachePath = cacheFilePath(`mx_main_force_v3_${code}_d${lookbackDays}.json`)
   const cached = await readJsonCache<{ symbol: string; lookbackDays: number; report: string; source: 'dongcai_mx' }>(cachePath, {
     ttlSeconds: 30 * 60,
   })
@@ -1060,18 +1060,28 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
     const prevDay = recent[recent.length - 2] ?? recent[0]
     const startClose = recent[0]?.close ?? latest.close
     const highestClose = Math.max(...recent.map((row) => row.close))
+    const lowestLow = Math.min(...recent.map((row) => row.low))
     const drawdownPct = highestClose > 0 ? ((latest.close / highestClose) - 1) * 100 : 0
     const windowChangePct = startClose > 0 ? ((latest.close / startClose) - 1) * 100 : 0
     const positiveDays = recent.filter((row, idx) => idx > 0 && row.close > recent[idx - 1].close).length
     const latestMa5 = ma(candles, candles.length - 1, 5)
     const latestMa10 = ma(candles, candles.length - 1, 10)
     const prevMa5 = ma(candles, Math.max(0, candles.length - 2), 5)
+    const avgVolume5 = avg(recent.slice(-5).map((row) => row.volume))
     const latestCloseVsMa5Pct = latestMa5 > 0 ? ((latest.close / latestMa5) - 1) * 100 : 0
     const latestCloseVsMa10Pct = latestMa10 > 0 ? ((latest.close / latestMa10) - 1) * 100 : 0
     const ma5SlopePct = prevMa5 > 0 ? ((latestMa5 / prevMa5) - 1) * 100 : 0
     const prevDayChangePct = prevDay.open > 0 ? ((prevDay.close / prevDay.open) - 1) * 100 : 0
     const prevDayRangePct = prevDay.open > 0 ? ((prevDay.high - prevDay.low) / prevDay.open) * 100 : 0
     const latestVsPrevClosePct = prevDay.close > 0 ? ((latest.close / prevDay.close) - 1) * 100 : 0
+    const latestBodyPct = latest.open > 0 ? (Math.abs(latest.close - latest.open) / latest.open) * 100 : 0
+    const latestRangePct = latest.open > 0 ? ((latest.high - latest.low) / latest.open) * 100 : 0
+    const latestUpperShadowPct = latest.open > 0 ? ((latest.high - Math.max(latest.open, latest.close)) / latest.open) * 100 : 0
+    const latestLowerShadowPct = latest.open > 0 ? ((Math.min(latest.open, latest.close) - latest.low) / latest.open) * 100 : 0
+    const latestClosePositionPct = latest.high > latest.low ? ((latest.close - latest.low) / (latest.high - latest.low)) * 100 : 50
+    const latestVolumeVsAvg5Pct = avgVolume5 > 0 ? ((latest.volume / avgVolume5) - 1) * 100 : 0
+    const supportRef = Math.min(prevDay.low, latest.low)
+    const resistanceRef = Math.max(prevDay.high, latest.high)
     const trendSummary = recent
       .slice(0, Math.max(0, recent.length - 1))
       .map((row) => `${row.ts}: O${row.open.toFixed(2)} H${row.high.toFixed(2)} L${row.low.toFixed(2)} C${row.close.toFixed(2)} V${row.volume}`)
@@ -1084,18 +1094,23 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
     const prompt = [
       `请只分析 A 股 ${code} ${name} 的“主力还在不在”。`,
       `请严格基于最近${lookbackDays}个交易日的日K技术面判断，不要使用资金流、消息面或盘口臆测。`,
-      `请先概括前段走势，再重点分析前一个交易日的日K，再判断主力还在不在，最后给后续操作建议。`,
+      `请先概括前段走势，再重点分析前一个交易日与最新一日的日K细节，包括实体、上下影、量能、均线位置、支撑阻力与强弱变化，再判断主力还在不在，最后给后续操作建议。`,
       `最近${lookbackDays}日日K：${candleSummary}。`,
       `前段走势（不含最新一日）：${trendSummary || '无'}。`,
       `前一个交易日日K：${prevDay.ts}: O${prevDay.open.toFixed(2)} H${prevDay.high.toFixed(2)} L${prevDay.low.toFixed(2)} C${prevDay.close.toFixed(2)} V${prevDay.volume}，单日涨跌=${prevDayChangePct.toFixed(2)}%，振幅=${prevDayRangePct.toFixed(2)}%。`,
-      `最新一日相对前收变化=${latestVsPrevClosePct.toFixed(2)}%，区间涨跌幅=${windowChangePct.toFixed(2)}%，相对区间高点回撤=${drawdownPct.toFixed(2)}%，收盘相对MA5=${latestCloseVsMa5Pct.toFixed(2)}%，收盘相对MA10=${latestCloseVsMa10Pct.toFixed(2)}%，MA5斜率=${ma5SlopePct.toFixed(2)}%，近${lookbackDays}日上涨天数=${positiveDays}/${Math.max(1, lookbackDays - 1)}。`,
-      '如果前段趋势仍完整、前一交易日只是强势整理或缩量回踩、短中期均线未破坏，可判断为主力还在；如果前一交易日已经明显转弱、破位或放量走坏，则判断为主力转弱或主力离场。',
-      '输出格式固定为5行：',
+      `最新一日日K：${latest.ts}: O${latest.open.toFixed(2)} H${latest.high.toFixed(2)} L${latest.low.toFixed(2)} C${latest.close.toFixed(2)} V${latest.volume}，相对前收变化=${latestVsPrevClosePct.toFixed(2)}%，实体=${latestBodyPct.toFixed(2)}%，振幅=${latestRangePct.toFixed(2)}%，上影=${latestUpperShadowPct.toFixed(2)}%，下影=${latestLowerShadowPct.toFixed(2)}%，收盘位于当日区间=${latestClosePositionPct.toFixed(2)}%。`,
+      `区间统计：区间涨跌幅=${windowChangePct.toFixed(2)}%，相对区间高点回撤=${drawdownPct.toFixed(2)}%，区间低点=${lowestLow.toFixed(2)}，近${lookbackDays}日上涨天数=${positiveDays}/${Math.max(1, lookbackDays - 1)}。`,
+      `均线与量能：收盘相对MA5=${latestCloseVsMa5Pct.toFixed(2)}%，收盘相对MA10=${latestCloseVsMa10Pct.toFixed(2)}%，MA5斜率=${ma5SlopePct.toFixed(2)}%，最新量能相对近5日均量=${latestVolumeVsAvg5Pct.toFixed(2)}%。`,
+      `关键价位：短线支撑参考=${supportRef.toFixed(2)}，短线压力参考=${resistanceRef.toFixed(2)}。`,
+      '如果前段趋势仍完整、前一交易日只是强势整理或缩量回踩、最新一日能重新站回关键均线并守住支撑，可判断为主力还在；如果前一交易日已经明显转弱、破位或放量走坏，且最新一日不能修复结构，则判断为主力转弱或主力离场。',
+      '输出格式固定为7行：',
       '1. 结论：主力还在/主力转弱/主力离场',
       '2. 前段走势：用1句话概括最近一段是上升、震荡整理还是转弱',
-      '3. 前一日K线：用1句话说明前一个交易日的K线对主力是否还在意味着什么',
-      '4. 依据：用1-2句解释当前结构、均线、回撤和强弱变化',
-      '5. 操作建议：给出简洁建议，如继续观察/等站回均线/跌破止损/不追高，并补一句风险提示',
+      '3. 前一日K线：用1句话说明前一个交易日的实体、影线和量能对主力是否还在意味着什么',
+      '4. 最新一日K线：用1句话说明最新一日是修复、确认转弱还是诱多/试盘，并点出量价配合',
+      '5. 结构依据：用1-2句解释当前结构、均线、回撤、支撑阻力和强弱变化',
+      '6. 关键价位：给出1句，明确短线支撑和压力分别看哪里',
+      '7. 操作建议：给出简洁建议，如继续观察/等站回均线/跌破止损/不追高，并补一句风险提示',
     ].join('\n')
 
     const out = await mxStockDiagnosis(prompt)

@@ -52,6 +52,7 @@ export default function SimilarStocksPanel(props: {
   const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
   const [mxLoadingBySymbol, setMxLoadingBySymbol] = useState<Record<string, boolean>>({})
+  const [mxSlowBySymbol, setMxSlowBySymbol] = useState<Record<string, boolean>>({})
   const [mxReportBySymbol, setMxReportBySymbol] = useState<Record<string, string>>({})
   const [mxErrorBySymbol, setMxErrorBySymbol] = useState<Record<string, string>>({})
   const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
@@ -139,6 +140,7 @@ export default function SimilarStocksPanel(props: {
 
   useEffect(() => {
     setMxLoadingBySymbol({})
+    setMxSlowBySymbol({})
     setMxReportBySymbol({})
     setMxErrorBySymbol({})
     setMxExpandedBySymbol({})
@@ -147,11 +149,15 @@ export default function SimilarStocksPanel(props: {
   const loadMxReport = async (symbol: string, lookbackDays: number) => {
     const symUpper = symbol.toUpperCase()
     setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
     setMxErrorBySymbol((prev) => {
       const next = { ...prev }
       delete next[symUpper]
       return next
     })
+    const slowTimer = window.setTimeout(() => {
+      setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    }, 8000)
     try {
       const out = await getMxMainForceAnalysis(symbol, { lookbackDays })
       setMxReportBySymbol((prev) => ({ ...prev, [symUpper]: out.report }))
@@ -161,7 +167,9 @@ export default function SimilarStocksPanel(props: {
         [symUpper]: e instanceof Error ? e.message : 'Kimi 解读失败',
       }))
     } finally {
+      window.clearTimeout(slowTimer)
       setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+      setMxSlowBySymbol((prev) => ({ ...prev, [symUpper]: false }))
     }
   }
 
@@ -467,6 +475,7 @@ export default function SimilarStocksPanel(props: {
               const s7Tag = it.s7Match?.keyword ? `KW:${it.s7Match.keyword}` : ''
               const reasons = (it.reasons ?? []).filter(Boolean)
               const mxLoading = !!mxLoadingBySymbol[symUpper]
+              const mxSlow = !!mxSlowBySymbol[symUpper]
               const mxReport = mxReportBySymbol[symUpper]
               const mxError = mxErrorBySymbol[symUpper]
               const mxExpanded = !!mxExpandedBySymbol[symUpper]
@@ -586,7 +595,13 @@ export default function SimilarStocksPanel(props: {
                         }}
                         className="rounded-lg border border-violet-900 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {mxLoading ? 'KIMI分析中…' : mxReport ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析') : 'KIMI分析'}
+                        {mxLoading
+                          ? mxSlow
+                            ? 'KIMI分析中(约20~60秒)…'
+                            : 'KIMI分析中…'
+                          : mxReport
+                            ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析')
+                            : 'KIMI分析'}
                       </button>
                       {watchlistSet.has(symUpper) ? (
                         <div className="text-xs text-slate-500">已在自选</div>
@@ -608,7 +623,13 @@ export default function SimilarStocksPanel(props: {
                       ) : mxError ? (
                         <div className="text-[11px] text-amber-300">{mxError}</div>
                       ) : (
-                        <div className="text-[11px] text-slate-400">{mxLoading ? 'Kimi分析中…' : '点击生成解读'}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {mxLoading
+                            ? mxSlow
+                              ? 'Kimi 正在做更细的日线结构分析，通常需要 20~60 秒，请勿重复点击。'
+                              : 'Kimi分析中…'
+                            : '点击生成解读'}
+                        </div>
                       )}
                     </div>
                   ) : null}

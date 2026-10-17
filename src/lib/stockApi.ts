@@ -22,6 +22,8 @@ import type {
   StockMxMainForceResponse,
 } from '@/types/stock'
 
+const mxMainForceInflight = new Map<string, Promise<StockMxMainForceResponse>>()
+
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal })
   if (!res.ok) {
@@ -113,11 +115,20 @@ export async function getMxMainForceAnalysis(
 ): Promise<StockMxMainForceResponse> {
   const q = new URLSearchParams()
   if (typeof input?.lookbackDays === 'number') q.set('lookbackDays', String(input.lookbackDays))
-  const data = await fetchJson<{ success: boolean } & StockMxMainForceResponse>(
-    `/api/stocks/${encodeURIComponent(symbol)}/mx/main-force?${q.toString()}`,
-    signal,
-  )
-  return data
+  const url = `/api/stocks/${encodeURIComponent(symbol)}/mx/main-force?${q.toString()}`
+  if (signal) {
+    return fetchJson<{ success: boolean } & StockMxMainForceResponse>(url, signal)
+  }
+
+  const key = `${String(symbol).toUpperCase()}::${String(input?.lookbackDays ?? '')}`
+  const existing = mxMainForceInflight.get(key)
+  if (existing) return existing
+
+  const pending = fetchJson<{ success: boolean } & StockMxMainForceResponse>(url).finally(() => {
+    mxMainForceInflight.delete(key)
+  })
+  mxMainForceInflight.set(key, pending)
+  return pending
 }
 
 export async function getSurvey(symbol: string, signal?: AbortSignal): Promise<StockSurveyResponse> {
