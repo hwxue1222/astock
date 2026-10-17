@@ -223,7 +223,6 @@ export default function SimilarStocksPanel(props: {
             placeholder="输入6位股票代码"
             className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
           />
-          <div className="text-xs font-semibold text-slate-100">{compareSymbol}</div>
           <div className="ml-2 text-xs text-slate-400">近</div>
           <input
             type="number"
