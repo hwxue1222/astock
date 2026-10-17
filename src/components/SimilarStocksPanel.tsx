@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getIndustryMoneyflow, getQuotes, getSimilarStocks } from '@/lib/stockApi'
+import { getIndustryMoneyflow, getMxMainForceAnalysis, getQuotes, getSimilarStocks } from '@/lib/stockApi'
 import { cn } from '@/lib/utils'
 import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
@@ -56,9 +56,13 @@ export default function SimilarStocksPanel(props: {
   const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
   const [industryBySymbol, setIndustryBySymbol] = useState<Record<string, string>>({})
   const [industryFlows, setIndustryFlows] = useState<IndustryMoneyflowItem[]>([])
+  const [mxLoadingBySymbol, setMxLoadingBySymbol] = useState<Record<string, boolean>>({})
+  const [mxReportBySymbol, setMxReportBySymbol] = useState<Record<string, string>>({})
+  const [mxErrorBySymbol, setMxErrorBySymbol] = useState<Record<string, string>>({})
+  const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
 
   const currentPlanned = useMemo(() => {
-    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
+    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
@@ -66,7 +70,8 @@ export default function SimilarStocksPanel(props: {
       standards.s5.enabled ? 5 : null,
       standards.s6.enabled ? 6 : null,
       standards.s7.enabled && s7Keywords.length ? 7 : null,
-    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x !== null)
+      standards.s8.enabled ? 8 : null,
+    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -85,6 +90,7 @@ export default function SimilarStocksPanel(props: {
       s5LookbackDays: standards.s5.lookbackDays,
       s7Keywords,
       s7Strict,
+      s8LookbackDays: standards.s8.lookbackDays,
     }
 
     const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
@@ -132,6 +138,34 @@ export default function SimilarStocksPanel(props: {
       .catch(() => void 0)
     return () => ac.abort()
   }, [data])
+
+  useEffect(() => {
+    setMxLoadingBySymbol({})
+    setMxReportBySymbol({})
+    setMxErrorBySymbol({})
+    setMxExpandedBySymbol({})
+  }, [data?.target, data?.top])
+
+  const loadMxReport = async (symbol: string, lookbackDays: number) => {
+    const symUpper = symbol.toUpperCase()
+    setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+    setMxErrorBySymbol((prev) => {
+      const next = { ...prev }
+      delete next[symUpper]
+      return next
+    })
+    try {
+      const out = await getMxMainForceAnalysis(symbol, { lookbackDays })
+      setMxReportBySymbol((prev) => ({ ...prev, [symUpper]: out.report }))
+    } catch (e: unknown) {
+      setMxErrorBySymbol((prev) => ({
+        ...prev,
+        [symUpper]: e instanceof Error ? e.message : 'Kimi 解读失败',
+      }))
+    } finally {
+      setMxLoadingBySymbol((prev) => ({ ...prev, [symUpper]: false }))
+    }
+  }
 
   // 获取行业资金流向（用于行业标签颜色）
   useEffect(() => {
@@ -398,6 +432,31 @@ export default function SimilarStocksPanel(props: {
             <div className="text-xs font-semibold text-amber-300">请输入至少1个关键字</div>
           ) : null}
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-xs text-slate-200">
+            <input
+              type="checkbox"
+              checked={standards.s8.enabled}
+              onChange={(e) => setStandard('s8', { enabled: e.target.checked })}
+            />
+            标准8
+          </label>
+          <div className="text-xs text-slate-400">主力还在：近</div>
+          <input
+            type="number"
+            min={2}
+            max={20}
+            value={standards.s8.lookbackDays}
+            onChange={(e) => {
+              const n = Number(e.target.value)
+              if (!Number.isFinite(n)) return
+              setStandard('s8', { lookbackDays: Math.max(5, Math.min(20, Math.floor(n))) })
+            }}
+            className="w-[72px] rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-slate-100"
+          />
+          <div className="text-xs text-slate-400">日K技术面保持强势或强势整理，Kimi做主力还在分析</div>
+        </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
@@ -446,110 +505,158 @@ export default function SimilarStocksPanel(props: {
                 .map((x) => (x.kind === 'strong' ? `强势:${x.name}` : x.kind === 'reversal' ? `反转:${x.name}` : `震荡待涨:${x.name}`))
                 .join('、')
               const s7Tag = it.s7Match?.keyword ? `KW:${it.s7Match.keyword}` : ''
+              const reasons = (it.reasons ?? []).filter(Boolean)
+              const mxLoading = !!mxLoadingBySymbol[symUpper]
+              const mxReport = mxReportBySymbol[symUpper]
+              const mxError = mxErrorBySymbol[symUpper]
+              const mxExpanded = !!mxExpandedBySymbol[symUpper]
 
               return (
                 <div
                   key={it.symbol}
-                  className={cn(
-                    'flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2',
-                  )}
+                  className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2"
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        const symbols = (data?.top ?? [])
-                          .map((x) => String(x.symbol ?? '').toUpperCase())
-                          .filter((x) => /^\d{6}$/.test(x))
-                        window.localStorage.setItem(
-                          'similar_nav:v1',
-                          JSON.stringify({
-                            seed: String(compareSymbol).toUpperCase(),
-                            symbols,
-                            atISO: new Date().toISOString(),
-                          }),
-                        )
-                      } catch {
-                        void 0
-                      }
-                      const qs = new URLSearchParams()
-                      qs.set('nav', 'similar')
-                      qs.set('seed', String(compareSymbol).toUpperCase())
-                      navigate(`/stocks/${encodeURIComponent(it.symbol)}?${qs.toString()}`)
-                    }}
-                    className="min-w-0 flex-1 text-left hover:opacity-95"
-                  >
-                    <div className="truncate text-sm font-semibold text-slate-100">
-                      {it.symbol}
-                      {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
-                      {industryName ? (
-                        <span
-                          className={cn(
-                            'ml-2 inline-flex max-w-28 items-center truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold',
-                            isPositive === true
-                              ? 'border-red-800 bg-red-950 text-red-200'
-                              : isPositive === false
-                                ? 'border-emerald-800 bg-emerald-950 text-emerald-200'
-                                : 'border-slate-800 bg-slate-900 text-slate-200',
-                          )}
-                        >
-                          {industryName}
-                        </span>
-                      ) : null}
-                    </div>
-                    {patternHits.length ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {patternHits.slice(0, 6).map((hit) => (
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const symbols = (data?.top ?? [])
+                            .map((x) => String(x.symbol ?? '').toUpperCase())
+                            .filter((x) => /^\d{6}$/.test(x))
+                          window.localStorage.setItem(
+                            'similar_nav:v1',
+                            JSON.stringify({
+                              seed: String(compareSymbol).toUpperCase(),
+                              symbols,
+                              atISO: new Date().toISOString(),
+                            }),
+                          )
+                        } catch {
+                          void 0
+                        }
+                        const qs = new URLSearchParams()
+                        qs.set('nav', 'similar')
+                        qs.set('seed', String(compareSymbol).toUpperCase())
+                        navigate(`/stocks/${encodeURIComponent(it.symbol)}?${qs.toString()}`)
+                      }}
+                      className="min-w-0 flex-1 text-left hover:opacity-95"
+                    >
+                      <div className="truncate text-sm font-semibold text-slate-100">
+                        {it.symbol}
+                        {it.name ? <span className="text-slate-400"> · {it.name}</span> : null}
+                        {industryName ? (
                           <span
-                            key={`${hit.kind}:${hit.id}`}
                             className={cn(
-                              'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold',
-                              hit.kind === 'strong'
+                              'ml-2 inline-flex max-w-28 items-center truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold',
+                              isPositive === true
                                 ? 'border-red-800 bg-red-950 text-red-200'
-                                : hit.kind === 'reversal'
-                                  ? 'border-amber-800 bg-amber-950 text-amber-200'
-                                  : 'border-sky-800 bg-sky-950 text-sky-200',
+                                : isPositive === false
+                                  ? 'border-emerald-800 bg-emerald-950 text-emerald-200'
+                                  : 'border-slate-800 bg-slate-900 text-slate-200',
                             )}
-                            title={patternTitle}
                           >
-                            {hit.name}
-                          </span>
-                        ))}
-                        {patternHits.length > 6 ? (
-                          <span
-                            className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-400"
-                            title={patternTitle}
-                          >
-                            +{patternHits.length - 6}
+                            {industryName}
                           </span>
                         ) : null}
                       </div>
-                    ) : null}
+                      {patternHits.length ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {patternHits.slice(0, 6).map((hit) => (
+                            <span
+                              key={`${hit.kind}:${hit.id}`}
+                              className={cn(
+                                'inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-semibold',
+                                hit.kind === 'strong'
+                                  ? 'border-red-800 bg-red-950 text-red-200'
+                                  : hit.kind === 'reversal'
+                                    ? 'border-amber-800 bg-amber-950 text-amber-200'
+                                    : 'border-sky-800 bg-sky-950 text-sky-200',
+                              )}
+                              title={patternTitle}
+                            >
+                              {hit.name}
+                            </span>
+                          ))}
+                          {patternHits.length > 6 ? (
+                            <span
+                              className="inline-flex items-center rounded-md border border-slate-800 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-400"
+                              title={patternTitle}
+                            >
+                              +{patternHits.length - 6}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
 
-                    {s7Tag ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        <span
-                          className="inline-flex items-center rounded-md border border-violet-800 bg-violet-950 px-2 py-0.5 text-[10px] font-semibold text-violet-200"
-                          title={`标准7命中：${it.s7Match?.keyword}（来源：${it.s7Match?.source}；数据：${it.s7Match?.provider}；URL：${it.s7Match?.sourceUrl}${it.s7Match?.evidence ? `；摘要：${it.s7Match.evidence}` : ''}）`}
-                        >
-                          {s7Tag}
-                        </span>
-                      </div>
-                    ) : null}
-                    <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
-                  </button>
-
-                  {watchlistSet.has(symUpper) ? (
-                    <div className="shrink-0 text-xs text-slate-500">已在自选</div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => addToWatchlist(it.symbol)}
-                      className="shrink-0 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
-                    >
-                      加入自选
+                      {s7Tag ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          <span
+                            className="inline-flex items-center rounded-md border border-violet-800 bg-violet-950 px-2 py-0.5 text-[10px] font-semibold text-violet-200"
+                            title={`标准7命中：${it.s7Match?.keyword}（来源：${it.s7Match?.source}；数据：${it.s7Match?.provider}；URL：${it.s7Match?.sourceUrl}${it.s7Match?.evidence ? `；摘要：${it.s7Match.evidence}` : ''}）`}
+                          >
+                            {s7Tag}
+                          </span>
+                        </div>
+                      ) : null}
+                      {reasons.length ? (
+                        <div className="mt-2 space-y-1 text-[11px] text-slate-400">
+                          {reasons.map((reason) => (
+                            <div key={reason} className="truncate">
+                              {reason}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="text-xs text-slate-500">score: {(it.score * 100).toFixed(1)}%</div>
                     </button>
-                  )}
+
+                    <div className="flex shrink-0 flex-col items-end gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const nextExpanded = !mxExpanded
+                          setMxExpandedBySymbol((prev) => ({ ...prev, [symUpper]: nextExpanded }))
+                          if (nextExpanded && !mxReport && !mxLoading && !mxError) {
+                            await loadMxReport(it.symbol, it.s8Match?.lookbackDays ?? standards.s8.lookbackDays)
+                          }
+                        }}
+                        className="rounded-lg border border-violet-800 bg-violet-950 px-2 py-1 text-xs font-semibold text-violet-200 hover:bg-violet-900"
+                      >
+                        {mxExpanded ? '收起Kimi解读' : '展开Kimi解读'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={mxLoading}
+                        onClick={() => loadMxReport(it.symbol, it.s8Match?.lookbackDays ?? standards.s8.lookbackDays)}
+                        className="rounded-lg border border-violet-900 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {mxLoading ? 'Kimi分析中…' : mxReport ? '刷新解读' : '生成解读'}
+                      </button>
+                      {watchlistSet.has(symUpper) ? (
+                        <div className="text-xs text-slate-500">已在自选</div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addToWatchlist(it.symbol)}
+                          className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                        >
+                          加入自选
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {mxExpanded ? (
+                    <div className="mt-2 rounded-lg border border-violet-900/70 bg-violet-950/20 px-3 py-2">
+                      {mxReport ? (
+                        <div className="whitespace-pre-wrap text-[11px] leading-5 text-slate-300">{mxReport}</div>
+                      ) : mxError ? (
+                        <div className="text-[11px] text-amber-300">{mxError}</div>
+                      ) : (
+                        <div className="text-[11px] text-slate-400">{mxLoading ? 'Kimi分析中…' : '点击生成解读'}</div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               )
             })}

@@ -79,7 +79,7 @@ const baseCandles = [
   { ts: '2026-10-01', open: 11.55, high: 11.8, low: 11.4, close: 11.65, volume: 250 },
 ] as const
 
-const allStandards = [1, 2, 3, 4, 5, 6, 7] as const
+const allStandards = [1, 2, 3, 4, 5, 6, 7, 8] as const
 const allCombinations = allStandards.flatMap((_, idx) => {
   const start = 1 << idx
   return Array.from({ length: 1 << idx }, () => null)
@@ -173,7 +173,7 @@ describe('findSimilarStocks', () => {
       top: 5,
       anchorDate: enabled.includes(2) ? '2026-09-30' : undefined,
       candidateSymbols: ['000001', '000002', '000003'],
-      enabled: enabled as Array<1 | 2 | 3 | 4 | 5 | 6 | 7>,
+      enabled: enabled as Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>,
       s1MaxMarketCapYi: 150,
       s2LastDays: 5,
       s2TurnoverSpikeMultiple: 2,
@@ -184,12 +184,17 @@ describe('findSimilarStocks', () => {
       s3VolumeMultiple: 2,
       s4MinOverlap: 1,
       s5LookbackDays: 15,
+      s8LookbackDays: 5,
       s7Keywords: enabled.includes(7) ? ['AI'] : undefined,
       s7Strict: true,
     })
 
     expect(out.top.length).toBeGreaterThan(0)
     expect(out.top[0]?.symbol).toMatch(/^\d{6}$/)
+    if (enabled.includes(8)) {
+      expect(out.top[0]?.s8Match?.lookbackDays).toBe(5)
+      expect(out.top[0]?.reasons.join(' ')).not.toContain('净流入')
+    }
 
     if (enabled.includes(6)) {
       expect(fetchMock).toHaveBeenCalled()

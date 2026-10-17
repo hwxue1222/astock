@@ -22,6 +22,7 @@ export type SimilarStock = {
   symbol: string
   name: string | undefined
   score: number
+  reasons?: string[]
   s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
   s7Match?: {
     keyword: string
@@ -29,6 +30,15 @@ export type SimilarStock = {
     provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
     sourceUrl: string
     evidence?: string
+  }
+  s8Match?: {
+    lookbackDays: number
+    windowChangePct: number
+    drawdownPct: number
+    latestCloseVsMa5Pct: number
+    latestCloseVsMa10Pct: number
+    ma5SlopePct: number
+    positiveDays: number
   }
 }
 
@@ -134,6 +144,29 @@ function cosine(a: number[], b: number[]): number {
   }
   if (na <= 0 || nb <= 0) return 0
   return dot / Math.sqrt(na * nb)
+}
+
+type Std3Hit = {
+  ok: boolean
+  date?: string
+  changePctAbs?: number
+  volMultiple?: number
+}
+
+type Std8Hit = {
+  ok: boolean
+  lookbackDays: number
+  windowChangePct: number
+  drawdownPct: number
+  latestCloseVsMa5Pct: number
+  latestCloseVsMa10Pct: number
+  ma5SlopePct: number
+  positiveDays: number
+}
+
+function formatYiFromYuan(yuan: number | undefined): string {
+  if (!Number.isFinite(yuan as number)) return '--'
+  return `${((yuan as number) / 1e8).toFixed(2)}亿`
 }
 
 function zscore(v: number[]): number[] {
@@ -276,6 +309,15 @@ function normalizeKeywords(raw: string[] | undefined): string[] {
     if (out.length >= 30) break
   }
   return out
+}
+
+function buildStd7Reason(match: NonNullable<SimilarStock['s7Match']>): string {
+  return `标准7 命中关键字 ${match.keyword}（${match.source}/${match.provider}）`
+}
+
+function appendReasonList(base: string[] | undefined, extra: Array<string | undefined | null | false>): string[] | undefined {
+  const merged = [...(base ?? []), ...extra.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)]
+  return merged.length ? merged : undefined
 }
 
 function matchesAnyKeyword(text: string, keywords: string[]): boolean {
@@ -435,10 +477,11 @@ async function applyStd7Filter(input: {
           url: match.sourceUrl,
         }).catch(() => null)
         if (!ok) return null
-        return { ...row, s7Match: { ...match, evidence: ok.evidence } }
+        const s7Match = { ...match, evidence: ok.evidence }
+        return { ...row, s7Match, reasons: appendReasonList(row.reasons, [buildStd7Reason(s7Match)]) }
       }
 
-      return { ...row, s7Match: match }
+      return { ...row, s7Match: match, reasons: appendReasonList(row.reasons, [buildStd7Reason(match)]) }
     })
     kept = matched.filter((x): x is SimilarStock => x !== null)
     if (kept.length >= want) break
@@ -637,7 +680,7 @@ export async function findSimilarStocks(input: {
   anchorDate?: string
   candidateSymbols?: string[]
   maxCandidates?: number
-  enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7>
+  enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>
   s1MaxMarketCapYi: number
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
@@ -648,6 +691,7 @@ export async function findSimilarStocks(input: {
   s3VolumeMultiple?: number
   s4MinOverlap?: number
   s5LookbackDays?: number
+  s8LookbackDays?: number
   s7Keywords?: string[]
   s7Strict?: boolean
 }): Promise<{
@@ -660,6 +704,7 @@ export async function findSimilarStocks(input: {
     candidateSource: string
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
     s7?: { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
+    s8?: { applied: boolean; lookbackDays?: number; reason?: string }
   }
 }> {
   const target = normalizeAshareCode(input.targetSymbol)
@@ -676,6 +721,7 @@ export async function findSimilarStocks(input: {
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
   const s4MinOverlap = Math.max(1, Math.min(10, input.s4MinOverlap ?? 1))
   const s5LookbackDays = Math.max(1, Math.min(365, Math.floor(input.s5LookbackDays ?? 15)))
+  const s8LookbackDays = Math.max(5, Math.min(20, Math.floor(input.s8LookbackDays ?? 5)))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
@@ -718,8 +764,74 @@ export async function findSimilarStocks(input: {
     return hasPatternInLastNDays(candles, 'roucuo_line', s5LookbackDays)
   }
 
+  const passStd3 = (candles: Candle[]): Std3Hit => {
+    const xs = candles.slice(-1 * (s3LastDays + 1))
+    if (xs.length < 2) return { ok: false }
+    for (let i = 1; i < xs.length; i += 1) {
+      const prev = xs[i - 1]
+      const cur = xs[i]
+      const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
+      const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
+      if (changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple) {
+        return { ok: true, date: cur.ts, changePctAbs, volMultiple }
+      }
+    }
+    return { ok: false }
+  }
+
+  const avg = (vals: number[]): number => (vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 0)
+  const passStd8 = (candles: Candle[]): Std8Hit => {
+    const recent = candles.slice(-1 * s8LookbackDays)
+    if (recent.length < s8LookbackDays) {
+      return {
+        ok: false,
+        lookbackDays: s8LookbackDays,
+        windowChangePct: 0,
+        drawdownPct: 0,
+        latestCloseVsMa5Pct: 0,
+        latestCloseVsMa10Pct: 0,
+        ma5SlopePct: 0,
+        positiveDays: 0,
+      }
+    }
+    const latest = recent[recent.length - 1]
+    const startClose = recent[0]?.close ?? latest.close
+    const highestClose = Math.max(...recent.map((row) => row.close))
+    const positiveDays = recent.filter((row, idx) => idx > 0 && row.close > recent[idx - 1].close).length
+    const ma = (rows: Candle[], end: number, days: number): number => {
+      const slice = rows.slice(Math.max(0, end - days + 1), end + 1)
+      return avg(slice.map((row) => row.close))
+    }
+    const curMa5 = ma(candles, candles.length - 1, 5)
+    const prevMa5 = ma(candles, Math.max(0, candles.length - 2), 5)
+    const curMa10 = ma(candles, candles.length - 1, 10)
+    const windowChangePct = startClose > 0 ? ((latest.close / startClose) - 1) * 100 : 0
+    const drawdownPct = highestClose > 0 ? ((latest.close / highestClose) - 1) * 100 : 0
+    const latestCloseVsMa5Pct = curMa5 > 0 ? ((latest.close / curMa5) - 1) * 100 : 0
+    const latestCloseVsMa10Pct = curMa10 > 0 ? ((latest.close / curMa10) - 1) * 100 : 0
+    const ma5SlopePct = prevMa5 > 0 ? ((curMa5 / prevMa5) - 1) * 100 : 0
+    const ok =
+      windowChangePct >= 3 &&
+      drawdownPct >= -6 &&
+      latestCloseVsMa5Pct >= -1 &&
+      latestCloseVsMa10Pct >= -2 &&
+      ma5SlopePct >= -0.5 &&
+      positiveDays >= Math.max(2, Math.floor((s8LookbackDays - 1) * 0.4))
+    return {
+      ok,
+      lookbackDays: s8LookbackDays,
+      windowChangePct,
+      drawdownPct,
+      latestCloseVsMa5Pct,
+      latestCloseVsMa10Pct,
+      ma5SlopePct,
+      positiveDays,
+    }
+  }
+
   const nameByCode = new Map<string, string>()
   const capYuanByCode = new Map<string, number>()
+  let stateOwnedMap = new Map<string, { isStateOwned: boolean; evidence: string[] }>()
 
   let candidates: string[]
   let candidatePool: 'full_market' | 'custom'
@@ -731,6 +843,9 @@ export async function findSimilarStocks(input: {
   const s7Strict = input.s7Strict !== false
   let s7Meta:
     | { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
+    | undefined
+  let s8Meta:
+    | { applied: boolean; lookbackDays?: number; reason?: string }
     | undefined
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
@@ -757,6 +872,7 @@ export async function findSimilarStocks(input: {
     candidateSource,
     ...(s6Meta ? { s6: s6Meta } : {}),
     ...(s7Meta ? { s7: s7Meta } : {}),
+    ...(s8Meta ? { s8: s8Meta } : {}),
   })
 
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target)
@@ -778,11 +894,11 @@ export async function findSimilarStocks(input: {
         meta: { ...buildMeta(), s6: { applied: false, reason: 'GALAXY_BRIDGE_URL missing' } },
       }
     }
-    const stateMap = await fetchGalaxyBridgeStateOwned({
+    stateOwnedMap = await fetchGalaxyBridgeStateOwned({
       codes: candidates,
       timeoutMs: 18_000,
     })
-    if (!stateMap.size) {
+    if (!stateOwnedMap.size) {
       return {
         target,
         candidates: 0,
@@ -791,7 +907,7 @@ export async function findSimilarStocks(input: {
       }
     }
     const stateSet = new Set<string>()
-    for (const [code, v] of stateMap.entries()) {
+    for (const [code, v] of stateOwnedMap.entries()) {
       if (v.isStateOwned) stateSet.add(code)
     }
     candidates = candidates.filter((c) => stateSet.has(c))
@@ -806,6 +922,7 @@ export async function findSimilarStocks(input: {
           symbol: c,
           name: typeof nameByCode.get(c) === 'string' ? String(nameByCode.get(c)) : undefined,
           score: clamp01(cap / capLimitYuan),
+          reasons: buildReasons({ code: c }),
         } satisfies SimilarStock
       })
       .sort((a, b) => b.score - a.score)
@@ -819,6 +936,7 @@ export async function findSimilarStocks(input: {
         symbol: c,
         name: typeof nameByCode.get(c) === 'string' ? String(nameByCode.get(c)) : undefined,
         score: 1,
+        reasons: buildReasons({ code: c }),
       }) satisfies SimilarStock)
       .slice(0, top)
     return {
@@ -829,9 +947,9 @@ export async function findSimilarStocks(input: {
     }
   }
 
-  const needsCandles = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5)
-  if (!needsCandles) {
-    let base = candidates
+  const needsDeepFilter = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5) || enabled.has(8)
+  if (!needsDeepFilter) {
+    let base: SimilarStock[] = candidates
       .map((c) => {
         const cap = capYuanByCode.get(c) ?? 0
         const capScore = enabled.has(1) ? clamp01(1 - cap / Math.max(1, capLimitYuan)) : 0
@@ -840,6 +958,7 @@ export async function findSimilarStocks(input: {
           symbol: c,
           name: typeof nameByCode.get(c) === 'string' ? String(nameByCode.get(c)) : undefined,
           score,
+          reasons: buildReasons({ code: c }),
         } satisfies SimilarStock
       })
       .sort((a, b) => b.score - a.score)
@@ -893,6 +1012,39 @@ export async function findSimilarStocks(input: {
     return { ok: overlap >= s4MinOverlap, overlap, ratio, matches }
   }
 
+  function buildReasons(input: {
+    code: string
+    similarity?: number
+    s3?: Std3Hit
+    s4?: { overlap: number; matches: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }> }
+    hasStd5?: boolean
+    s8?: Std8Hit
+  }): string[] | undefined {
+    const cap = capYuanByCode.get(input.code)
+    const stateOwned = stateOwnedMap.get(input.code)
+    return appendReasonList(undefined, [
+      enabled.has(1) && typeof cap === 'number'
+        ? `标准1 总市值 ${formatYiFromYuan(cap)} <= ${s1MaxMarketCapYi.toFixed(0)}亿`
+        : undefined,
+      enabled.has(2) && typeof input.similarity === 'number'
+        ? `标准2 近${s2LastDays}日形态相似度 ${(input.similarity * 100).toFixed(1)}%`
+        : undefined,
+      enabled.has(3) && input.s3?.ok
+        ? `标准3 ${input.s3.date ?? ''} 涨跌幅 ${Number(input.s3.changePctAbs ?? 0).toFixed(2)}%，量能 ${Number(input.s3.volMultiple ?? 0).toFixed(2)}倍`
+        : undefined,
+      enabled.has(4) && input.s4?.overlap
+        ? `标准4 形态交集 ${input.s4.overlap} 个：${input.s4.matches.map((x) => x.name).join('、')}`
+        : undefined,
+      enabled.has(5) && input.hasStd5 ? `标准5 近${s5LookbackDays}日出现揉搓线` : undefined,
+      enabled.has(6) && stateOwned?.isStateOwned
+        ? `标准6 国资属性${stateOwned.evidence.length ? `：${stateOwned.evidence.join('、')}` : ''}`
+        : undefined,
+      enabled.has(8) && input.s8?.ok
+        ? `标准8 主力还在：近${input.s8.lookbackDays}日涨幅 ${input.s8.windowChangePct.toFixed(1)}%，回撤 ${input.s8.drawdownPct.toFixed(1)}%，收盘相对MA10 ${input.s8.latestCloseVsMa10Pct.toFixed(1)}%`
+        : undefined,
+    ])
+  }
+
   if (enabled.size === 1 && enabled.has(4)) {
     const want = top
     const picked: Array<SimilarStock & { idx: number; ratio: number }> = []
@@ -928,6 +1080,7 @@ export async function findSimilarStocks(input: {
             idx,
             ratio: s4.ratio,
             s4Matches: s4.matches,
+            reasons: buildReasons({ code, s4 }),
           })
         } catch {
           continue
@@ -939,7 +1092,7 @@ export async function findSimilarStocks(input: {
     const out = picked
       .sort((a, b) => b.ratio - a.ratio)
       .slice(0, top)
-      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, s4Matches: x.s4Matches }))
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, s4Matches: x.s4Matches, reasons: x.reasons }))
     return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
@@ -978,6 +1131,7 @@ export async function findSimilarStocks(input: {
             score: clamp01(0.5 + hit.score * 0.5),
             idx,
             pScore: hit.score,
+            reasons: buildReasons({ code, hasStd5: true }),
           })
         } catch {
           continue
@@ -989,21 +1143,8 @@ export async function findSimilarStocks(input: {
     const out = picked
       .sort((a, b) => b.pScore - a.pScore)
       .slice(0, top)
-      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, reasons: x.reasons }))
     return { target, candidates: candidates.length, top: out, meta: buildMeta() }
-  }
-
-  const passStd3 = (candles: Candle[]): boolean => {
-    const xs = candles.slice(-1 * (s3LastDays + 1))
-    if (xs.length < 2) return false
-    for (let i = 1; i < xs.length; i += 1) {
-      const prev = xs[i - 1]
-      const cur = xs[i]
-      const changePctAbs = Math.abs((cur.close / Math.max(1e-9, prev.close) - 1) * 100)
-      const volMultiple = cur.volume / Math.max(1e-9, prev.volume)
-      if (changePctAbs + 0.02 >= s3ChangePct && volMultiple >= s3VolumeMultiple) return true
-    }
-    return false
   }
 
   if (enabled.size === 1 && enabled.has(3)) {
@@ -1029,7 +1170,8 @@ export async function findSimilarStocks(input: {
             timeoutMs: 12_000,
             fallbackToTencent: true,
           })
-          if (!passStd3(candles)) continue
+          const s3 = passStd3(candles)
+          if (!s3.ok) continue
 
           if (pickedSet.has(code)) continue
           pickedSet.add(code)
@@ -1038,6 +1180,7 @@ export async function findSimilarStocks(input: {
             name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
             score: clamp01(1 - idx / Math.max(1, candidates.length)),
             idx,
+            reasons: buildReasons({ code, s3 }),
           })
         } catch {
           continue
@@ -1049,61 +1192,115 @@ export async function findSimilarStocks(input: {
     const out = picked
       .sort((a, b) => a.idx - b.idx)
       .slice(0, top)
-      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score }))
+      .map((x) => ({ symbol: x.symbol, name: x.name, score: x.score, reasons: x.reasons }))
+    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
+  }
+
+  if (enabled.size === 1 && enabled.has(8)) {
+    const rows = await mapLimit<string, SimilarStock | null>(candidates, 4, async (code, idx) => {
+      try {
+        const candles = await getCandlesCached({
+          code,
+          klt: '101',
+          fqt: '1',
+          limit: Math.max(40, s8LookbackDays + 12),
+          ttlMs: 10 * 60 * 1000,
+          timeoutMs: 12_000,
+          fallbackToTencent: true,
+        })
+        const s8 = passStd8(candles)
+        if (!s8.ok) return null
+        return {
+          symbol: code,
+          name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+          score: clamp01(0.4 + 0.6 * (1 - idx / Math.max(1, candidates.length))),
+          reasons: buildReasons({ code, s8 }),
+          s8Match: s8,
+        } satisfies SimilarStock
+      } catch {
+        return null
+      }
+    })
+    s8Meta = { applied: true, lookbackDays: s8LookbackDays }
+    const out = rows.filter((x): x is SimilarStock => x !== null).slice(0, top)
     return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
   const rows = await mapLimit<string, SimilarStock | null>(
     candidates,
-    enabled.has(2) || enabled.has(3) ? 4 : 2,
-    async (code) => {
-    try {
-      const candles = await getCandlesCached({
-        code,
-        klt: '101',
-        fqt: klineFqt,
-        limit: fetchLimitCandidates,
-        ttlMs: 10 * 60 * 1000,
-        timeoutMs: 12_000,
-        fallbackToTencent: true,
-      })
-      const candlesLatest = candles
-      if (enabled.has(5)) {
-        if (!passStd5(candlesLatest)) return null
-      }
-      if (enabled.has(3)) {
-        if (!passStd3(candlesLatest)) return null
-      }
+    enabled.has(2) || enabled.has(3) || enabled.has(8) ? 4 : 2,
+    async (code, idx) => {
+      try {
+        const needCandles = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5) || enabled.has(8)
+        const candles = needCandles
+          ? await getCandlesCached({
+              code,
+              klt: '101',
+              fqt: klineFqt,
+              limit: fetchLimitCandidates,
+              ttlMs: 10 * 60 * 1000,
+              timeoutMs: 12_000,
+              fallbackToTencent: true,
+            })
+          : []
+        const candlesLatest = candles
+        const s3 = enabled.has(3) ? passStd3(candlesLatest) : { ok: false }
+        const hasStd5 = enabled.has(5) ? passStd5(candlesLatest) : false
+        const s4 = passStd4(candlesLatest)
+        const s8 = enabled.has(8)
+          ? passStd8(candlesLatest)
+          : undefined
 
-      const s4 = passStd4(candlesLatest)
-      if (!s4.ok) return null
+        if (enabled.has(5) && !hasStd5) return null
+        if (enabled.has(3) && !s3.ok) return null
+        if (!s4.ok) return null
+        if (enabled.has(8) && !s8?.ok) return null
 
-      if (enabled.has(2)) {
-        const fv = buildDailyShapeFeature({ candles: candlesLatest, lastDays: s2LastDays })
-        if (!fv.length || !fvTarget.length) return null
-        const s = cosine(fvTarget, fv)
-        const sim = clamp01((s + 1) / 2)
-        if (sim < s2MinSimilarity) return null
+        if (enabled.has(2)) {
+          const fv = buildDailyShapeFeature({ candles: candlesLatest, lastDays: s2LastDays })
+          if (!fv.length || !fvTarget.length) return null
+          const s = cosine(fvTarget, fv)
+          const sim = clamp01((s + 1) / 2)
+          if (sim < s2MinSimilarity) return null
+          return {
+            symbol: code,
+            name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
+            score: sim,
+            reasons: buildReasons({ code, similarity: sim, s3, s4, hasStd5, s8 }),
+            s4Matches: enabled.has(4) ? s4.matches : undefined,
+            s8Match: s8,
+          } satisfies SimilarStock
+        }
+
+        const cap = capYuanByCode.get(code) ?? 0
+        const scoreBase = clamp01(1 - idx / Math.max(1, candidates.length))
+        const capScore = enabled.has(1) ? clamp01(1 - cap / Math.max(1, capLimitYuan)) : 0
+        const s8Score = s8
+          ? clamp01(
+              clamp01(s8.windowChangePct / 12) * 0.35 +
+                clamp01((s8.drawdownPct + 8) / 8) * 0.25 +
+                clamp01((s8.latestCloseVsMa10Pct + 4) / 8) * 0.2 +
+                clamp01((s8.ma5SlopePct + 1) / 2) * 0.2,
+            )
+          : 0
+        const score = clamp01(scoreBase * 0.45 + capScore * 0.15 + s8Score * 0.4)
         return {
           symbol: code,
           name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-          score: sim,
+          score,
+          reasons: buildReasons({ code, s3, s4, hasStd5, s8 }),
           s4Matches: enabled.has(4) ? s4.matches : undefined,
+          s8Match: s8,
         } satisfies SimilarStock
+      } catch {
+        return null
       }
-
-      const cap = capYuanByCode.get(code) ?? 0
-      return {
-        symbol: code,
-        name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-        score: clamp01(cap / Math.max(1, capLimitYuan)),
-        s4Matches: enabled.has(4) ? s4.matches : undefined,
-      } satisfies SimilarStock
-    } catch {
-      return null
-    }
     },
   )
+
+  if (enabled.has(8)) {
+    s8Meta = { applied: true, lookbackDays: s8LookbackDays }
+  }
 
   let scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
 

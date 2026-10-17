@@ -105,6 +105,7 @@ export interface SimilarStockItem {
   symbol: string
   name: string | undefined
   score: number
+  reasons?: string[]
   s4Matches?: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }>
   s7Match?: {
     keyword: string
@@ -112,6 +113,15 @@ export interface SimilarStockItem {
     provider: 'eastmoney_quote' | 'eastmoney_concept' | 'eastmoney_news' | 'eastmoney_announcement'
     sourceUrl: string
     evidence?: string
+  }
+  s8Match?: {
+    lookbackDays: number
+    windowChangePct: number
+    drawdownPct: number
+    latestCloseVsMa5Pct: number
+    latestCloseVsMa10Pct: number
+    ma5SlopePct: number
+    positiveDays: number
   }
 }
 
@@ -128,6 +138,7 @@ export interface SimilarStocksResponse {
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
     s1?: { applied: boolean; reason?: string }
     s7?: { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
+    s8?: { applied: boolean; lookbackDays?: number; reason?: string }
   }
 }
 
@@ -204,6 +215,13 @@ export interface StockSurveyResponse {
 
 export interface StockQuotesResponse {
   items: StockQuoteResponse[]
+}
+
+export interface StockMxMainForceResponse {
+  symbol: string
+  lookbackDays: number
+  report: string
+  source: 'dongcai_mx'
 }
 
 export type IndustryRotationForecastItem = {

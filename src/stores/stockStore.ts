@@ -26,6 +26,7 @@ interface StockState {
     s5: { enabled: boolean; lookbackDays: number }
     s6: { enabled: boolean }
     s7: { enabled: boolean; keywords: string; strict: boolean }
+    s8: { enabled: boolean; lookbackDays: number }
   }
   similarLast: { key: string; data: SimilarStocksResponse; atISO: string } | null
   thsClassicParsedByUrl: Record<string, { codes: string[]; atISO: string }>
@@ -98,6 +99,7 @@ export const useStockStore = create<StockState>()(
         s5: { enabled: false, lookbackDays: 15 },
         s6: { enabled: false },
         s7: { enabled: false, keywords: '', strict: true },
+        s8: { enabled: false, lookbackDays: 5 },
       },
       similarLast: null,
       thsClassicParsedByUrl: {},
@@ -242,10 +244,10 @@ export const useStockStore = create<StockState>()(
     }),
     {
       name: 'stock-risk-dashboard.v1',
-      version: 22,
+      version: 24,
       migrate: (persisted: unknown, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
-        if (version >= 22) return persisted
+        if (version >= 24) return persisted
         const p = persisted as Partial<StockState>
         const isAshareCode = (s: string) => /^\d{6}$/.test(s)
         const watchlist = Array.isArray(p.watchlist)
@@ -283,6 +285,7 @@ export const useStockStore = create<StockState>()(
             s5: { enabled: false, lookbackDays: 15 },
             s6: { enabled: false },
             s7: { enabled: false, keywords: '', strict: true },
+            s8: { enabled: false, lookbackDays: 5 },
           },
           similarLast: null,
           thsClassicParsedByUrl: {},

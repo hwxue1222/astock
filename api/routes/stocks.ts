@@ -14,10 +14,10 @@ import {
   getEastmoneyRegionalComposition,
 } from '../providers/eastmoneyDatacenter.js'
 import { getEastmoneyQuote } from '../providers/eastmoneyQuote.js'
-import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
-import { findSimilarStocks, screenStocks } from '../domain/similarity.js'
 import { getEastmoneyF10News } from '../providers/eastmoneyNews.js'
+import { getEastmoneyAnnouncements } from '../providers/eastmoneyNotices.js'
 import { getRumorsOverview } from '../domain/rumors.js'
+import { findSimilarStocks, screenStocks } from '../domain/similarity.js'
 import { getThsClassicArticleStocks, getThsClassicStats } from '../providers/thsClassic.js'
 import { getEastmoneyCompanySurvey } from '../providers/eastmoneySurvey.js'
 import { getSinaIndustryMoneyflow } from '../providers/sinaMoneyflowIndustry.js'
@@ -723,7 +723,10 @@ router.get(
     const enabled = enabledRaw
       .split(',')
       .map((x) => Number(String(x).trim()))
-      .filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6 || x === 7)
+      .filter(
+        (x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 =>
+          x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6 || x === 7 || x === 8,
+      )
     const enabledUniq = Array.from(new Set(enabled))
 
     const s1MaxMarketCapYi = Number(req.query.s1MaxMarketCapYi ?? 150)
@@ -736,6 +739,7 @@ router.get(
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
     const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
+    const s8LookbackDays = Number(req.query.s8LookbackDays ?? 5)
 
     const kwRaw = String(req.query.s7Keywords ?? '').trim()
     const s7Keywords = kwRaw
@@ -781,6 +785,7 @@ router.get(
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
+        s8LookbackDays: Number.isFinite(s8LookbackDays) ? s8LookbackDays : 5,
         s7Keywords,
         s7Strict,
       })
@@ -1003,6 +1008,104 @@ router.get('/mx/diagnosis', async (req: Request, res: Response): Promise<void> =
     res.status(502).json({
       success: false,
       error: '妙想诊断异常',
+      detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
+    })
+  }
+})
+
+router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promise<void> => {
+  const symbol = String(req.params.symbol ?? '').trim()
+  const code = normalizeAshareCode(symbol)
+  if (!code) {
+    res.status(400).json({ success: false, error: 'Missing symbol' })
+    return
+  }
+  if (!isMxAvailable()) {
+    res.status(503).json({ success: false, error: '妙想数据源不可用（缺少 KIMI_API_KEY）' })
+    return
+  }
+
+  const lookbackDays = Math.max(5, Math.min(20, Math.floor(Number(req.query.lookbackDays ?? 5) || 5)))
+  const cachePath = cacheFilePath(`mx_main_force_${code}_d${lookbackDays}.json`)
+  const cached = await readJsonCache<{ symbol: string; lookbackDays: number; report: string; source: 'dongcai_mx' }>(cachePath, {
+    ttlSeconds: 30 * 60,
+  })
+  if (cached?.report) {
+    res.status(200).json({ success: true, ...cached })
+    return
+  }
+
+  try {
+    const [quote, kline] = await Promise.all([
+      getEastmoneyQuote({ code, timeoutMs: 8_000 }).catch(() => null),
+      fetchKlineRobust({
+        code,
+        klt: '101',
+        fqt: '1',
+        limit: Math.max(30, lookbackDays + 12),
+      }).catch(() => ({ candles: [], sources: [] })),
+    ])
+
+    const candles = (kline.candles ?? []).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.volume))
+    const recent = candles.slice(-1 * lookbackDays)
+    if (recent.length < lookbackDays) {
+      res.status(502).json({ success: false, error: 'K线数据不足' })
+      return
+    }
+
+    const avg = (vals: number[]): number => (vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 0)
+    const ma = (rows: Array<{ close: number }>, end: number, days: number): number => {
+      const slice = rows.slice(Math.max(0, end - days + 1), end + 1)
+      return avg(slice.map((row) => row.close))
+    }
+    const latest = recent[recent.length - 1]
+    const startClose = recent[0]?.close ?? latest.close
+    const highestClose = Math.max(...recent.map((row) => row.close))
+    const drawdownPct = highestClose > 0 ? ((latest.close / highestClose) - 1) * 100 : 0
+    const windowChangePct = startClose > 0 ? ((latest.close / startClose) - 1) * 100 : 0
+    const positiveDays = recent.filter((row, idx) => idx > 0 && row.close > recent[idx - 1].close).length
+    const latestMa5 = ma(candles, candles.length - 1, 5)
+    const latestMa10 = ma(candles, candles.length - 1, 10)
+    const prevMa5 = ma(candles, Math.max(0, candles.length - 2), 5)
+    const latestCloseVsMa5Pct = latestMa5 > 0 ? ((latest.close / latestMa5) - 1) * 100 : 0
+    const latestCloseVsMa10Pct = latestMa10 > 0 ? ((latest.close / latestMa10) - 1) * 100 : 0
+    const ma5SlopePct = prevMa5 > 0 ? ((latestMa5 / prevMa5) - 1) * 100 : 0
+    const candleSummary = recent
+      .map((row) => `${row.ts}: O${row.open.toFixed(2)} H${row.high.toFixed(2)} L${row.low.toFixed(2)} C${row.close.toFixed(2)} V${row.volume}`)
+      .join('; ')
+    const name = quote?.name?.trim() || code
+
+    const prompt = [
+      `请只分析 A 股 ${code} ${name} 的“主力还在不在”。`,
+      `请严格基于最近${lookbackDays}个交易日的日K技术面判断，不要使用资金流、消息面或盘口臆测。`,
+      `最近${lookbackDays}日日K：${candleSummary}。`,
+      `技术统计：区间涨跌幅=${windowChangePct.toFixed(2)}%，相对区间高点回撤=${drawdownPct.toFixed(2)}%，收盘相对MA5=${latestCloseVsMa5Pct.toFixed(2)}%，收盘相对MA10=${latestCloseVsMa10Pct.toFixed(2)}%，MA5斜率=${ma5SlopePct.toFixed(2)}%，近${lookbackDays}日上涨天数=${positiveDays}/${Math.max(1, lookbackDays - 1)}。`,
+      '如果股价仍站稳短中期均线、回撤可控、上涨结构未破坏，可判断为主力还在；如果转入走弱或破位，则判断为主力转弱或主力离场。',
+      '输出格式固定为4行：',
+      '1. 结论：主力还在/主力转弱/主力离场',
+      '2. 依据：用1-2句解释K线结构、均线和回撤特征',
+      '3. 风险：一句话说明当前不确定性',
+      '4. 观察点：一句话说明下一步看什么',
+    ].join('\n')
+
+    const out = await mxStockDiagnosis(prompt)
+    if (!out?.preview) {
+      res.status(502).json({ success: false, error: '妙想主力解读失败' })
+      return
+    }
+
+    const payload = {
+      symbol: code,
+      lookbackDays,
+      report: out.preview,
+      source: 'dongcai_mx' as const,
+    }
+    await writeJsonCache(cachePath, payload)
+    res.status(200).json({ success: true, ...payload })
+  } catch (e: unknown) {
+    res.status(502).json({
+      success: false,
+      error: '妙想主力解读异常',
       detail: process.env.NODE_ENV === 'development' ? errorMessage(e) : undefined,
     })
   }

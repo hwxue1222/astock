@@ -1,13 +1,17 @@
 /**
- * 东方财富妙想金融数据 — TypeScript 原生封装
+ * Kimi / 东方财富妙想能力封装
  *
- * 通过 agent-gw 网关调用妙想数据后端（与 dongcai_cli.py 等价），
- * 使 Vercel serverless 环境也能使用妙想能力（仅需 KIMI_API_KEY）。
+ * 支持两条链路：
+ * 1. AGENT_GW_TOKEN -> 继续走 agent-gw 的 dongcai 数据工具
+ * 2. KIMI_API_KEY   -> 走 Kimi 官方 OpenAI 兼容 chat/completions
  *
- * 优雅降级：凭证缺失或网关不可达时返回 null，不影响主流程。
+ * 优先使用 agent-gw；若只有普通 Kimi API Key，则退化为通用大模型问答。
  */
 
-const DEFAULT_BASE_URL = 'https://agent-gw.kimi.com/coding'
+const DEFAULT_AGENT_GW_BASE_URL = 'https://agent-gw.kimi.com/coding'
+const DEFAULT_KIMI_BASE_URL_GLOBAL = 'https://api.moonshot.ai/v1'
+const DEFAULT_KIMI_BASE_URL_CN = 'https://api.moonshot.cn/v1'
+const DEFAULT_KIMI_MODEL = 'kimi-k3'
 
 interface MxToolResult {
   is_success?: string
@@ -16,23 +20,60 @@ interface MxToolResult {
   [key: string]: unknown
 }
 
-function resolveBaseUrl(): string {
-  return (process.env.AGENT_GW_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '')
+interface ChatCompletionResponse {
+  choices?: Array<{
+    message?: {
+      content?: string | Array<{ type?: string; text?: string }>
+    }
+  }>
 }
 
-function resolveTokens(): string[] {
-  const candidates = [
-    process.env.KIMI_API_KEY ?? '',
-    process.env.AGENT_GW_TOKEN ?? '',
+function resolveAgentGwBaseUrl(): string {
+  return (process.env.AGENT_GW_BASE_URL || DEFAULT_AGENT_GW_BASE_URL).replace(/\/$/, '')
+}
+
+function resolveAgentGwToken(): string {
+  return String(process.env.AGENT_GW_TOKEN ?? '').trim()
+}
+
+function resolveKimiApiKey(): string {
+  return String(process.env.KIMI_API_KEY ?? process.env.MOONSHOT_API_KEY ?? '').trim()
+}
+
+function resolveKimiModel(): string {
+  return (
+    String(process.env.KIMI_MODEL ?? process.env.MOONSHOT_MODEL ?? DEFAULT_KIMI_MODEL).trim() || DEFAULT_KIMI_MODEL
+  )
+}
+
+function resolveKimiBaseUrls(): string[] {
+  const configured = [
+    process.env.KIMI_BASE_URL ?? '',
+    process.env.MOONSHOT_BASE_URL ?? '',
   ]
-  return [...new Set(candidates.map((t) => t.trim()).filter(Boolean))]
+    .map((x) => String(x).trim().replace(/\/$/, ''))
+    .filter(Boolean)
+
+  return [...new Set([...configured, DEFAULT_KIMI_BASE_URL_GLOBAL, DEFAULT_KIMI_BASE_URL_CN])]
 }
 
-async function postTool(token: string, body: unknown, timeoutMs: number): Promise<MxToolResult> {
+function extractAssistantText(payload: ChatCompletionResponse): string {
+  const content = payload.choices?.[0]?.message?.content
+  if (typeof content === 'string') return content.trim()
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('\n')
+      .trim()
+  }
+  return ''
+}
+
+async function postAgentTool(token: string, body: unknown, timeoutMs: number): Promise<MxToolResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const resp = await fetch(`${resolveBaseUrl()}/v1/tools`, {
+    const resp = await fetch(`${resolveAgentGwBaseUrl()}/v1/tools`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -51,14 +92,114 @@ async function postTool(token: string, body: unknown, timeoutMs: number): Promis
   }
 }
 
-/** 依次尝试候选凭证；全部失败返回 null */
-async function callWithAuth(body: unknown, timeoutMs: number): Promise<MxToolResult | null> {
-  const tokens = resolveTokens()
-  for (const token of tokens) {
+async function postKimiChat(input: {
+  apiKey: string
+  baseUrl: string
+  system: string
+  user: string
+  timeoutMs: number
+  temperature?: number
+}): Promise<{ preview: string } | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), input.timeoutMs)
+  try {
+    const resp = await fetch(`${input.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: resolveKimiModel(),
+        temperature: input.temperature ?? 0.2,
+        messages: [
+          { role: 'system', content: input.system },
+          { role: 'user', content: input.user },
+        ],
+      }),
+      signal: controller.signal,
+    })
+    if (!resp.ok) {
+      const text = (await resp.text()).slice(0, 300)
+      throw new Error(`HTTP ${resp.status}: ${text}`)
+    }
+    const payload = (await resp.json()) as ChatCompletionResponse
+    const preview = extractAssistantText(payload)
+    return preview ? { preview } : null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function callWithAgentGw(body: unknown, timeoutMs: number): Promise<MxToolResult | null> {
+  const token = resolveAgentGwToken()
+  if (!token) return null
+  try {
+    return await postAgentTool(token, body, timeoutMs)
+  } catch {
+    return null
+  }
+}
+
+function buildRegularChatPrompt(
+  apiName: string,
+  params: Record<string, unknown>,
+): { system: string; user: string; temperature?: number } {
+  const query = String(params.query ?? '').trim()
+  switch (apiName) {
+    case 'mx_stocks_screener':
+      return {
+        system:
+          '你是A股选股助手。当前是通用Kimi模式，不直接连接东方财富选股数据库。请基于用户条件给出可执行的筛选思路、候选方向、关键观察指标，并明确哪些结论需要用户自行用实时行情验证。输出用简洁Markdown。',
+        user: query || '请给出A股选股思路。',
+        temperature: 0.3,
+      }
+    case 'mx_finance_data':
+      return {
+        system:
+          '你是A股财务分析助手。若用户询问财务指标、资产负债、现金流、营收等，请结合常见财务口径给出解释与分析框架。若缺少真实数据库数值，请明确说明，并避免编造具体财务数据。',
+        user: query || '请做财务分析。',
+        temperature: 0.2,
+      }
+    case 'mx_finance_search':
+      return {
+        system:
+          '你是金融资讯整理助手。若没有联网检索结果，请不要伪造“最新研报/新闻”原文，而是给出应关注的信息维度、可能的机构观点框架和检索建议；若用户问题本身提供了事实，则优先围绕这些事实做总结。',
+        user: query || '请做金融资讯整理。',
+        temperature: 0.3,
+      }
+    case 'stock_diagnosis':
+    default:
+      return {
+        system:
+          '你是A股个股诊断助手。优先基于用户已提供的数据和事实进行分析，不要编造实时行情或未提供的财务数据。结论要清楚，风险与观察点要分开写，允许使用Markdown。',
+        user: query || '请做个股诊断。',
+        temperature: 0.2,
+      }
+  }
+}
+
+async function callWithRegularKimi(
+  apiName: string,
+  params: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<MxToolResult | null> {
+  const apiKey = resolveKimiApiKey()
+  if (!apiKey) return null
+  const prompt = buildRegularChatPrompt(apiName, params)
+  for (const baseUrl of resolveKimiBaseUrls()) {
     try {
-      return await postTool(token, body, timeoutMs)
+      const out = await postKimiChat({
+        apiKey,
+        baseUrl,
+        system: prompt.system,
+        user: prompt.user,
+        timeoutMs,
+        temperature: prompt.temperature,
+      })
+      if (out?.preview) return { is_success: 'true', data_preview: out.preview }
     } catch {
-      // try next token
+      // try next base url
     }
   }
   return null
@@ -75,7 +216,7 @@ export async function callMxTool(
   timeoutMs = 60_000,
 ): Promise<MxToolResult | null> {
   const fullName = apiName.startsWith('dongcai_') ? apiName : `dongcai_${apiName}`
-  return callWithAuth(
+  const viaAgentGw = await callWithAgentGw(
     {
       method: 'call_data_source_tool',
       params: {
@@ -86,11 +227,13 @@ export async function callMxTool(
     },
     timeoutMs,
   )
+  if (viaAgentGw) return viaAgentGw
+  return callWithRegularKimi(apiName, params, timeoutMs)
 }
 
 /** 妙想是否可用（有凭证） */
 export function isMxAvailable(): boolean {
-  return resolveTokens().length > 0
+  return Boolean(resolveAgentGwToken() || resolveKimiApiKey())
 }
 
 /**
