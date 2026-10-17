@@ -49,6 +49,7 @@ export default function Home() {
   const toggleBlacklist = useStockStore((s) => s.toggleBlacklist)
   const moveWatchlistItem = useStockStore((s) => s.moveWatchlistItem)
   const moveBlacklistItem = useStockStore((s) => s.moveBlacklistItem)
+  const selectedSymbol = useStockStore((s) => s.selectedSymbol)
   const standardSymbol = useStockStore((s) => s.standardSymbol)
   const klineKlt = useStockStore((s) => s.klineKlt)
   const klineFqt = useStockStore((s) => s.klineFqt)
@@ -376,7 +377,7 @@ export default function Home() {
         {activeTab === 'similar' && (
           <div className="space-y-4">
             <SimilarStocksPanel
-              targetSymbol={standardSymbol ?? '002829'}
+              targetSymbol={selectedSymbol ?? standardSymbol ?? '002829'}
               klt={klineKlt}
               fqt={klineFqt}
               days={klineLimit}

@@ -724,8 +724,8 @@ router.get(
       .split(',')
       .map((x) => Number(String(x).trim()))
       .filter(
-        (x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 =>
-          x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6 || x === 7 || x === 8,
+        (x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 =>
+          x === 1 || x === 2 || x === 3 || x === 4 || x === 5 || x === 6 || x === 7,
       )
     const enabledUniq = Array.from(new Set(enabled))
 
@@ -739,7 +739,6 @@ router.get(
     const s3VolumeMultiple = Number(req.query.s3VolumeMultiple ?? 2)
     const s4MinOverlap = Number(req.query.s4MinOverlap ?? 1)
     const s5LookbackDays = Number(req.query.s5LookbackDays ?? 15)
-    const s8LookbackDays = Number(req.query.s8LookbackDays ?? 5)
 
     const kwRaw = String(req.query.s7Keywords ?? '').trim()
     const s7Keywords = kwRaw
@@ -785,7 +784,6 @@ router.get(
         s3VolumeMultiple: Number.isFinite(s3VolumeMultiple) ? s3VolumeMultiple : 2,
         s4MinOverlap: Number.isFinite(s4MinOverlap) ? s4MinOverlap : 1,
         s5LookbackDays: Number.isFinite(s5LookbackDays) ? s5LookbackDays : 15,
-        s8LookbackDays: Number.isFinite(s8LookbackDays) ? s8LookbackDays : 5,
         s7Keywords,
         s7Strict,
       })

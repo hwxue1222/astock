@@ -6,6 +6,7 @@ import { useStockStore } from '@/stores/stockStore'
 import type { KlineFqt, KlineKlt, SimilarStocksResponse, IndustryMoneyflowItem } from '@/types/stock'
 
 type SimilarInput = Parameters<typeof getSimilarStocks>[1]
+const KIMI_LOOKBACK_DAYS = 5
 
 function parseKeywords(raw: string): string[] {
   const text = String(raw ?? '').trim()
@@ -45,12 +46,11 @@ export default function SimilarStocksPanel(props: {
   }, [standardSymbol])
 
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
-  const compareSymbol = standardSymbol ?? props.targetSymbol
+  const compareSymbol = standards.s2.enabled && standardSymbol ? standardSymbol : props.targetSymbol
   const anchorDate = similarAnchorDate
   const s7Keywords = useMemo(() => parseKeywords(standards.s7.keywords), [standards.s7.keywords])
   const s7Strict = true
 
-  const data: SimilarStocksResponse | null = similarLast?.data ?? null
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [request, setRequest] = useState<{ symbol: string; input: SimilarInput; key: string } | null>(null)
@@ -62,7 +62,7 @@ export default function SimilarStocksPanel(props: {
   const [mxExpandedBySymbol, setMxExpandedBySymbol] = useState<Record<string, boolean>>({})
 
   const currentPlanned = useMemo(() => {
-    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8> = [
+    const enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7> = [
       standards.s1.enabled ? 1 : null,
       standards.s2.enabled ? 2 : null,
       standards.s3.enabled ? 3 : null,
@@ -70,8 +70,7 @@ export default function SimilarStocksPanel(props: {
       standards.s5.enabled ? 5 : null,
       standards.s6.enabled ? 6 : null,
       standards.s7.enabled && s7Keywords.length ? 7 : null,
-      standards.s8.enabled ? 8 : null,
-    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 => x !== null)
+    ].filter((x): x is 1 | 2 | 3 | 4 | 5 | 6 | 7 => x !== null)
 
     const input: SimilarInput = {
       days: props.days,
@@ -90,12 +89,12 @@ export default function SimilarStocksPanel(props: {
       s5LookbackDays: standards.s5.lookbackDays,
       s7Keywords,
       s7Strict,
-      s8LookbackDays: standards.s8.lookbackDays,
     }
 
     const key = JSON.stringify({ kind: 'similar', symbol: compareSymbol, input })
     return { symbol: compareSymbol, input, key }
   }, [anchorDate, compareSymbol, props.days, props.fqt, props.klt, s7Keywords, s7Strict, standards])
+  const data: SimilarStocksResponse | null = similarLast?.key === currentPlanned.key ? similarLast.data : null
 
   useEffect(() => {
     if (!request) return
@@ -433,30 +432,6 @@ export default function SimilarStocksPanel(props: {
           ) : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 text-xs text-slate-200">
-            <input
-              type="checkbox"
-              checked={standards.s8.enabled}
-              onChange={(e) => setStandard('s8', { enabled: e.target.checked })}
-            />
-            标准8
-          </label>
-          <div className="text-xs text-slate-400">主力还在：近</div>
-          <input
-            type="number"
-            min={2}
-            max={20}
-            value={standards.s8.lookbackDays}
-            onChange={(e) => {
-              const n = Number(e.target.value)
-              if (!Number.isFinite(n)) return
-              setStandard('s8', { lookbackDays: Math.max(5, Math.min(20, Math.floor(n))) })
-            }}
-            className="w-[72px] rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-slate-100"
-          />
-          <div className="text-xs text-slate-400">日K技术面保持强势或强势整理，Kimi做主力还在分析</div>
-        </div>
       </div>
 
       <div className="mt-2 text-xs text-slate-500">
@@ -614,24 +589,19 @@ export default function SimilarStocksPanel(props: {
                     <div className="flex shrink-0 flex-col items-end gap-2">
                       <button
                         type="button"
-                        onClick={async () => {
-                          const nextExpanded = !mxExpanded
-                          setMxExpandedBySymbol((prev) => ({ ...prev, [symUpper]: nextExpanded }))
-                          if (nextExpanded && !mxReport && !mxLoading && !mxError) {
-                            await loadMxReport(it.symbol, it.s8Match?.lookbackDays ?? standards.s8.lookbackDays)
-                          }
-                        }}
-                        className="rounded-lg border border-violet-800 bg-violet-950 px-2 py-1 text-xs font-semibold text-violet-200 hover:bg-violet-900"
-                      >
-                        {mxExpanded ? '收起Kimi解读' : '展开Kimi解读'}
-                      </button>
-                      <button
-                        type="button"
                         disabled={mxLoading}
-                        onClick={() => loadMxReport(it.symbol, it.s8Match?.lookbackDays ?? standards.s8.lookbackDays)}
+                        onClick={async () => {
+                          if (mxLoading) return
+                          if (mxReport) {
+                            setMxExpandedBySymbol((prev) => ({ ...prev, [symUpper]: !mxExpanded }))
+                            return
+                          }
+                          setMxExpandedBySymbol((prev) => ({ ...prev, [symUpper]: true }))
+                          await loadMxReport(it.symbol, KIMI_LOOKBACK_DAYS)
+                        }}
                         className="rounded-lg border border-violet-900 bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {mxLoading ? 'Kimi分析中…' : mxReport ? '刷新解读' : '生成解读'}
+                        {mxLoading ? 'KIMI分析中…' : mxReport ? (mxExpanded ? '收起KIMI分析' : '查看KIMI分析') : 'KIMI分析'}
                       </button>
                       {watchlistSet.has(symUpper) ? (
                         <div className="text-xs text-slate-500">已在自选</div>

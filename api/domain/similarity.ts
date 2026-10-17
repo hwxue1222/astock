@@ -31,15 +31,6 @@ export type SimilarStock = {
     sourceUrl: string
     evidence?: string
   }
-  s8Match?: {
-    lookbackDays: number
-    windowChangePct: number
-    drawdownPct: number
-    latestCloseVsMa5Pct: number
-    latestCloseVsMa10Pct: number
-    ma5SlopePct: number
-    positiveDays: number
-  }
 }
 
 type UniverseEntry = {
@@ -151,17 +142,6 @@ type Std3Hit = {
   date?: string
   changePctAbs?: number
   volMultiple?: number
-}
-
-type Std8Hit = {
-  ok: boolean
-  lookbackDays: number
-  windowChangePct: number
-  drawdownPct: number
-  latestCloseVsMa5Pct: number
-  latestCloseVsMa10Pct: number
-  ma5SlopePct: number
-  positiveDays: number
 }
 
 function formatYiFromYuan(yuan: number | undefined): string {
@@ -680,7 +660,7 @@ export async function findSimilarStocks(input: {
   anchorDate?: string
   candidateSymbols?: string[]
   maxCandidates?: number
-  enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>
+  enabled: Array<1 | 2 | 3 | 4 | 5 | 6 | 7>
   s1MaxMarketCapYi: number
   s2LastDays: number
   s2TurnoverSpikeMultiple: number
@@ -691,7 +671,6 @@ export async function findSimilarStocks(input: {
   s3VolumeMultiple?: number
   s4MinOverlap?: number
   s5LookbackDays?: number
-  s8LookbackDays?: number
   s7Keywords?: string[]
   s7Strict?: boolean
 }): Promise<{
@@ -704,7 +683,6 @@ export async function findSimilarStocks(input: {
     candidateSource: string
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
     s7?: { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
-    s8?: { applied: boolean; lookbackDays?: number; reason?: string }
   }
 }> {
   const target = normalizeAshareCode(input.targetSymbol)
@@ -721,7 +699,6 @@ export async function findSimilarStocks(input: {
   const s3VolumeMultiple = Math.max(1, Math.min(10, input.s3VolumeMultiple ?? 2))
   const s4MinOverlap = Math.max(1, Math.min(10, input.s4MinOverlap ?? 1))
   const s5LookbackDays = Math.max(1, Math.min(365, Math.floor(input.s5LookbackDays ?? 15)))
-  const s8LookbackDays = Math.max(5, Math.min(20, Math.floor(input.s8LookbackDays ?? 5)))
 
   const capLimitYuan = s1MaxMarketCapYi * 100_000_000
   const window = enabled.has(2) ? s2LastDays : enabled.has(3) ? s3LastDays : 0
@@ -779,56 +756,6 @@ export async function findSimilarStocks(input: {
     return { ok: false }
   }
 
-  const avg = (vals: number[]): number => (vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 0)
-  const passStd8 = (candles: Candle[]): Std8Hit => {
-    const recent = candles.slice(-1 * s8LookbackDays)
-    if (recent.length < s8LookbackDays) {
-      return {
-        ok: false,
-        lookbackDays: s8LookbackDays,
-        windowChangePct: 0,
-        drawdownPct: 0,
-        latestCloseVsMa5Pct: 0,
-        latestCloseVsMa10Pct: 0,
-        ma5SlopePct: 0,
-        positiveDays: 0,
-      }
-    }
-    const latest = recent[recent.length - 1]
-    const startClose = recent[0]?.close ?? latest.close
-    const highestClose = Math.max(...recent.map((row) => row.close))
-    const positiveDays = recent.filter((row, idx) => idx > 0 && row.close > recent[idx - 1].close).length
-    const ma = (rows: Candle[], end: number, days: number): number => {
-      const slice = rows.slice(Math.max(0, end - days + 1), end + 1)
-      return avg(slice.map((row) => row.close))
-    }
-    const curMa5 = ma(candles, candles.length - 1, 5)
-    const prevMa5 = ma(candles, Math.max(0, candles.length - 2), 5)
-    const curMa10 = ma(candles, candles.length - 1, 10)
-    const windowChangePct = startClose > 0 ? ((latest.close / startClose) - 1) * 100 : 0
-    const drawdownPct = highestClose > 0 ? ((latest.close / highestClose) - 1) * 100 : 0
-    const latestCloseVsMa5Pct = curMa5 > 0 ? ((latest.close / curMa5) - 1) * 100 : 0
-    const latestCloseVsMa10Pct = curMa10 > 0 ? ((latest.close / curMa10) - 1) * 100 : 0
-    const ma5SlopePct = prevMa5 > 0 ? ((curMa5 / prevMa5) - 1) * 100 : 0
-    const ok =
-      windowChangePct >= 3 &&
-      drawdownPct >= -6 &&
-      latestCloseVsMa5Pct >= -1 &&
-      latestCloseVsMa10Pct >= -2 &&
-      ma5SlopePct >= -0.5 &&
-      positiveDays >= Math.max(2, Math.floor((s8LookbackDays - 1) * 0.4))
-    return {
-      ok,
-      lookbackDays: s8LookbackDays,
-      windowChangePct,
-      drawdownPct,
-      latestCloseVsMa5Pct,
-      latestCloseVsMa10Pct,
-      ma5SlopePct,
-      positiveDays,
-    }
-  }
-
   const nameByCode = new Map<string, string>()
   const capYuanByCode = new Map<string, number>()
   let stateOwnedMap = new Map<string, { isStateOwned: boolean; evidence: string[] }>()
@@ -843,9 +770,6 @@ export async function findSimilarStocks(input: {
   const s7Strict = input.s7Strict !== false
   let s7Meta:
     | { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
-    | undefined
-  let s8Meta:
-    | { applied: boolean; lookbackDays?: number; reason?: string }
     | undefined
   if (input.candidateSymbols?.length) {
     candidates = input.candidateSymbols.map(normalizeAshareCode).filter(Boolean)
@@ -872,7 +796,6 @@ export async function findSimilarStocks(input: {
     candidateSource,
     ...(s6Meta ? { s6: s6Meta } : {}),
     ...(s7Meta ? { s7: s7Meta } : {}),
-    ...(s8Meta ? { s8: s8Meta } : {}),
   })
 
   candidates = Array.from(new Set(candidates)).filter((c) => c !== target)
@@ -947,7 +870,7 @@ export async function findSimilarStocks(input: {
     }
   }
 
-  const needsDeepFilter = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5) || enabled.has(8)
+  const needsDeepFilter = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5)
   if (!needsDeepFilter) {
     let base: SimilarStock[] = candidates
       .map((c) => {
@@ -1018,7 +941,6 @@ export async function findSimilarStocks(input: {
     s3?: Std3Hit
     s4?: { overlap: number; matches: Array<{ id: string; name: string; kind: 'strong' | 'reversal' | 'range_ready' }> }
     hasStd5?: boolean
-    s8?: Std8Hit
   }): string[] | undefined {
     const cap = capYuanByCode.get(input.code)
     const stateOwned = stateOwnedMap.get(input.code)
@@ -1038,9 +960,6 @@ export async function findSimilarStocks(input: {
       enabled.has(5) && input.hasStd5 ? `标准5 近${s5LookbackDays}日出现揉搓线` : undefined,
       enabled.has(6) && stateOwned?.isStateOwned
         ? `标准6 国资属性${stateOwned.evidence.length ? `：${stateOwned.evidence.join('、')}` : ''}`
-        : undefined,
-      enabled.has(8) && input.s8?.ok
-        ? `标准8 主力还在：近${input.s8.lookbackDays}日涨幅 ${input.s8.windowChangePct.toFixed(1)}%，回撤 ${input.s8.drawdownPct.toFixed(1)}%，收盘相对MA10 ${input.s8.latestCloseVsMa10Pct.toFixed(1)}%`
         : undefined,
     ])
   }
@@ -1196,42 +1115,12 @@ export async function findSimilarStocks(input: {
     return { target, candidates: candidates.length, top: out, meta: buildMeta() }
   }
 
-  if (enabled.size === 1 && enabled.has(8)) {
-    const rows = await mapLimit<string, SimilarStock | null>(candidates, 4, async (code, idx) => {
-      try {
-        const candles = await getCandlesCached({
-          code,
-          klt: '101',
-          fqt: '1',
-          limit: Math.max(40, s8LookbackDays + 12),
-          ttlMs: 10 * 60 * 1000,
-          timeoutMs: 12_000,
-          fallbackToTencent: true,
-        })
-        const s8 = passStd8(candles)
-        if (!s8.ok) return null
-        return {
-          symbol: code,
-          name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
-          score: clamp01(0.4 + 0.6 * (1 - idx / Math.max(1, candidates.length))),
-          reasons: buildReasons({ code, s8 }),
-          s8Match: s8,
-        } satisfies SimilarStock
-      } catch {
-        return null
-      }
-    })
-    s8Meta = { applied: true, lookbackDays: s8LookbackDays }
-    const out = rows.filter((x): x is SimilarStock => x !== null).slice(0, top)
-    return { target, candidates: candidates.length, top: out, meta: buildMeta() }
-  }
-
   const rows = await mapLimit<string, SimilarStock | null>(
     candidates,
-    enabled.has(2) || enabled.has(3) || enabled.has(8) ? 4 : 2,
+    enabled.has(2) || enabled.has(3) ? 4 : 2,
     async (code, idx) => {
       try {
-        const needCandles = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5) || enabled.has(8)
+        const needCandles = enabled.has(2) || enabled.has(3) || enabled.has(4) || enabled.has(5)
         const candles = needCandles
           ? await getCandlesCached({
               code,
@@ -1247,14 +1136,10 @@ export async function findSimilarStocks(input: {
         const s3 = enabled.has(3) ? passStd3(candlesLatest) : { ok: false }
         const hasStd5 = enabled.has(5) ? passStd5(candlesLatest) : false
         const s4 = passStd4(candlesLatest)
-        const s8 = enabled.has(8)
-          ? passStd8(candlesLatest)
-          : undefined
 
         if (enabled.has(5) && !hasStd5) return null
         if (enabled.has(3) && !s3.ok) return null
         if (!s4.ok) return null
-        if (enabled.has(8) && !s8?.ok) return null
 
         if (enabled.has(2)) {
           const fv = buildDailyShapeFeature({ candles: candlesLatest, lastDays: s2LastDays })
@@ -1266,41 +1151,27 @@ export async function findSimilarStocks(input: {
             symbol: code,
             name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
             score: sim,
-            reasons: buildReasons({ code, similarity: sim, s3, s4, hasStd5, s8 }),
+            reasons: buildReasons({ code, similarity: sim, s3, s4, hasStd5 }),
             s4Matches: enabled.has(4) ? s4.matches : undefined,
-            s8Match: s8,
           } satisfies SimilarStock
         }
 
         const cap = capYuanByCode.get(code) ?? 0
         const scoreBase = clamp01(1 - idx / Math.max(1, candidates.length))
         const capScore = enabled.has(1) ? clamp01(1 - cap / Math.max(1, capLimitYuan)) : 0
-        const s8Score = s8
-          ? clamp01(
-              clamp01(s8.windowChangePct / 12) * 0.35 +
-                clamp01((s8.drawdownPct + 8) / 8) * 0.25 +
-                clamp01((s8.latestCloseVsMa10Pct + 4) / 8) * 0.2 +
-                clamp01((s8.ma5SlopePct + 1) / 2) * 0.2,
-            )
-          : 0
-        const score = clamp01(scoreBase * 0.45 + capScore * 0.15 + s8Score * 0.4)
+        const score = clamp01(scoreBase * 0.8 + capScore * 0.2)
         return {
           symbol: code,
           name: typeof nameByCode.get(code) === 'string' ? String(nameByCode.get(code)) : undefined,
           score,
-          reasons: buildReasons({ code, s3, s4, hasStd5, s8 }),
+          reasons: buildReasons({ code, s3, s4, hasStd5 }),
           s4Matches: enabled.has(4) ? s4.matches : undefined,
-          s8Match: s8,
         } satisfies SimilarStock
       } catch {
         return null
       }
     },
   )
-
-  if (enabled.has(8)) {
-    s8Meta = { applied: true, lookbackDays: s8LookbackDays }
-  }
 
   let scored = rows.filter((x): x is SimilarStock => x !== null).sort((a, b) => b.score - a.score)
 

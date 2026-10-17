@@ -170,7 +170,7 @@ export async function getSimilarStocks(
     klt: KlineKlt
     fqt: KlineFqt
     anchorDate?: string
-    enabled?: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8>
+    enabled?: Array<1 | 2 | 3 | 4 | 5 | 6 | 7>
     s1MaxMarketCapYi?: number
     s2LastDays?: number
     s2TurnoverSpikeMultiple?: number
@@ -183,7 +183,6 @@ export async function getSimilarStocks(
     s5LookbackDays?: number
     s7Keywords?: string[]
     s7Strict?: boolean
-    s8LookbackDays?: number
     candidates?: string[]
   },
   signal?: AbortSignal,
@@ -208,7 +207,6 @@ export async function getSimilarStocks(
   if (typeof input.s5LookbackDays === 'number') q.set('s5LookbackDays', String(input.s5LookbackDays))
   if (input.s7Keywords?.length) q.set('s7Keywords', input.s7Keywords.join(','))
   if (typeof input.s7Strict === 'boolean') q.set('s7Strict', input.s7Strict ? '1' : '0')
-  if (typeof input.s8LookbackDays === 'number') q.set('s8LookbackDays', String(input.s8LookbackDays))
   if (input.candidates?.length) q.set('candidates', input.candidates.join(','))
   const data = await fetchJson<{ success: boolean } & SimilarStocksResponse>(
     `/api/stocks/${encodeURIComponent(symbol)}/similar?${q.toString()}`,

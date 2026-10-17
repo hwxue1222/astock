@@ -114,15 +114,6 @@ export interface SimilarStockItem {
     sourceUrl: string
     evidence?: string
   }
-  s8Match?: {
-    lookbackDays: number
-    windowChangePct: number
-    drawdownPct: number
-    latestCloseVsMa5Pct: number
-    latestCloseVsMa10Pct: number
-    ma5SlopePct: number
-    positiveDays: number
-  }
 }
 
 export interface SimilarStocksResponse {
@@ -138,7 +129,6 @@ export interface SimilarStocksResponse {
     s6?: { applied: boolean; source?: string; kept?: number; reason?: string }
     s1?: { applied: boolean; reason?: string }
     s7?: { applied: boolean; keywords: string[]; scanned?: number; kept?: number; reason?: string }
-    s8?: { applied: boolean; lookbackDays?: number; reason?: string }
   }
 }
 
