@@ -216,6 +216,8 @@ export interface StockMxMainForceResponse {
 
 export interface StockMxIntradayResponse {
   symbol: string
+  analysisDate: string
+  analysisScope: 'today' | 'latest_trading_day'
   report: string
   source: 'dongcai_mx_intraday'
 }

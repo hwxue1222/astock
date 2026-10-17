@@ -1149,8 +1149,14 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     return
   }
 
-  const cachePath = cacheFilePath(`mx_intraday_v1_${code}.json`)
-  const cached = await readJsonCache<{ symbol: string; report: string; source: 'dongcai_mx_intraday' }>(cachePath, {
+  const cachePath = cacheFilePath(`mx_intraday_v2_${code}.json`)
+  const cached = await readJsonCache<{
+    symbol: string
+    analysisDate: string
+    analysisScope: 'today' | 'latest_trading_day'
+    report: string
+    source: 'dongcai_mx_intraday'
+  }>(cachePath, {
     ttlSeconds: 10 * 60,
   })
   if (cached?.report) {
@@ -1164,13 +1170,25 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
       getEastmoneyTrend({ code, ndays: 1, timeoutMs: 12_000 }).catch(() => ({ bars: [], source: '' })),
     ])
 
-    const bars = (trend.bars ?? []).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.volume))
-    if (bars.length < 30) {
+    const allBars = (trend.bars ?? []).filter((row) => Number.isFinite(row.close) && Number.isFinite(row.volume))
+    const dateOf = (ts: string): string => String(ts).match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? ''
+    const availableDates = Array.from(new Set(allBars.map((row) => dateOf(row.ts)).filter(Boolean))).sort()
+    const analysisDate = availableDates[availableDates.length - 1] ?? ''
+    const bars = allBars.filter((row) => dateOf(row.ts) === analysisDate)
+    if (bars.length < 30 || !analysisDate) {
       res.status(502).json({ success: false, error: '分时数据不足' })
       return
     }
 
     const avg = (vals: number[]): number => (vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : 0)
+    const todayCn = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+    const analysisScope = analysisDate === todayCn ? 'today' as const : 'latest_trading_day' as const
+    const analysisScopeText = analysisScope === 'today' ? '当日' : '最近一个交易日'
     const hhmm = (ts: string): string => {
       const m = String(ts).match(/(\d{2}:\d{2})$/)
       return m ? m[1] : String(ts)
@@ -1233,7 +1251,8 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
       .join('; ')
 
     const prompt = [
-      `请只分析 A 股 ${code} ${name} 当天的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
+      `请只分析 A 股 ${code} ${name} 在 ${analysisDate} 这个交易日的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
+      `本次分析定位：${analysisScopeText}分时分析。你只分析 ${analysisDate} 这一个交易日，不要把别的交易日混进来。`,
       '请像短线复盘一样，先从分时里拆出最重要的3个细节，再合起来定性，最后给下一交易日剧本和风控位。',
       `开盘到收盘关键统计：开盘=${openBar.open.toFixed(2)}，收盘=${lastBar.close.toFixed(2)}，全天涨跌=${openToClosePct.toFixed(2)}%，全天最高=${dayHighBar.high.toFixed(2)}@${hhmm(dayHighBar.ts)}，全天最低=${dayLowBar.low.toFixed(2)}@${hhmm(dayLowBar.ts)}。`,
       `冲高回落结构：开盘到高点涨幅=${openToHighPct.toFixed(2)}%，高点回落到收盘=${highToClosePct.toFixed(2)}%，午后首根价格=${noonOpenBar.close.toFixed(2)}，午后到收盘变化=${noonToClosePct.toFixed(2)}%。`,
@@ -1257,9 +1276,12 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
       return
     }
 
+    const report = `分析交易日：${analysisDate}（${analysisScopeText}）\n${out.preview}`
     const payload = {
       symbol: code,
-      report: out.preview,
+      analysisDate,
+      analysisScope,
+      report,
       source: 'dongcai_mx_intraday' as const,
     }
     await writeJsonCache(cachePath, payload)
