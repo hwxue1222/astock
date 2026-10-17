@@ -62,6 +62,16 @@ function errorMessage(e: unknown): string {
   }
 }
 
+function formatCnDate(input: string): string {
+  const m = String(input ?? '').match(/(\d{4})-(\d{2})-(\d{2})/)
+  if (!m) return String(input ?? '')
+  return `${Number(m[2])}月${Number(m[3])}日`
+}
+
+function formatPriceYuan(value: number): string {
+  return `${Number(value).toFixed(2)}元`
+}
+
 async function mapLimit<T, R>(
   items: T[],
   limit: number,
@@ -1025,7 +1035,7 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
   }
 
   const lookbackDays = Math.max(5, Math.min(20, Math.floor(Number(req.query.lookbackDays ?? 5) || 5)))
-  const cachePath = cacheFilePath(`mx_main_force_v3_${code}_d${lookbackDays}.json`)
+  const cachePath = cacheFilePath(`mx_main_force_v4_${code}_d${lookbackDays}.json`)
   const cached = await readJsonCache<{ symbol: string; lookbackDays: number; report: string; source: 'dongcai_mx' }>(cachePath, {
     ttlSeconds: 30 * 60,
   })
@@ -1085,24 +1095,25 @@ router.get('/:symbol/mx/main-force', async (req: Request, res: Response): Promis
     const resistanceRef = Math.max(prevDay.high, latest.high)
     const trendSummary = recent
       .slice(0, Math.max(0, recent.length - 1))
-      .map((row) => `${row.ts}: O${row.open.toFixed(2)} H${row.high.toFixed(2)} L${row.low.toFixed(2)} C${row.close.toFixed(2)} V${row.volume}`)
+      .map((row) => `${formatCnDate(row.ts)}: 开${formatPriceYuan(row.open)} 高${formatPriceYuan(row.high)} 低${formatPriceYuan(row.low)} 收${formatPriceYuan(row.close)} 量${Math.round(row.volume)}手`)
       .join('; ')
     const candleSummary = recent
-      .map((row) => `${row.ts}: O${row.open.toFixed(2)} H${row.high.toFixed(2)} L${row.low.toFixed(2)} C${row.close.toFixed(2)} V${row.volume}`)
+      .map((row) => `${formatCnDate(row.ts)}: 开${formatPriceYuan(row.open)} 高${formatPriceYuan(row.high)} 低${formatPriceYuan(row.low)} 收${formatPriceYuan(row.close)} 量${Math.round(row.volume)}手`)
       .join('; ')
     const name = quote?.name?.trim() || code
 
     const prompt = [
       `请只分析 A 股 ${code} ${name} 的“主力还在不在”。`,
       `请严格基于最近${lookbackDays}个交易日的日K技术面判断，不要使用资金流、消息面或盘口臆测。`,
+      '输出格式要求：日期一律写成“10月15日”这种中文格式，不要写“10-15”“2026-10-15”；价格一律写成“6.27元”，不要只写数字；成交量写“270360手”。',
       `请先概括前段走势，再重点分析前一个交易日与最新一日的日K细节，包括实体、上下影、量能、均线位置、支撑阻力与强弱变化，再判断主力还在不在，最后给后续操作建议。`,
       `最近${lookbackDays}日日K：${candleSummary}。`,
       `前段走势（不含最新一日）：${trendSummary || '无'}。`,
-      `前一个交易日日K：${prevDay.ts}: O${prevDay.open.toFixed(2)} H${prevDay.high.toFixed(2)} L${prevDay.low.toFixed(2)} C${prevDay.close.toFixed(2)} V${prevDay.volume}，单日涨跌=${prevDayChangePct.toFixed(2)}%，振幅=${prevDayRangePct.toFixed(2)}%。`,
-      `最新一日日K：${latest.ts}: O${latest.open.toFixed(2)} H${latest.high.toFixed(2)} L${latest.low.toFixed(2)} C${latest.close.toFixed(2)} V${latest.volume}，相对前收变化=${latestVsPrevClosePct.toFixed(2)}%，实体=${latestBodyPct.toFixed(2)}%，振幅=${latestRangePct.toFixed(2)}%，上影=${latestUpperShadowPct.toFixed(2)}%，下影=${latestLowerShadowPct.toFixed(2)}%，收盘位于当日区间=${latestClosePositionPct.toFixed(2)}%。`,
-      `区间统计：区间涨跌幅=${windowChangePct.toFixed(2)}%，相对区间高点回撤=${drawdownPct.toFixed(2)}%，区间低点=${lowestLow.toFixed(2)}，近${lookbackDays}日上涨天数=${positiveDays}/${Math.max(1, lookbackDays - 1)}。`,
+      `前一个交易日日K：${formatCnDate(prevDay.ts)}: 开${formatPriceYuan(prevDay.open)} 高${formatPriceYuan(prevDay.high)} 低${formatPriceYuan(prevDay.low)} 收${formatPriceYuan(prevDay.close)} 量${Math.round(prevDay.volume)}手，单日涨跌=${prevDayChangePct.toFixed(2)}%，振幅=${prevDayRangePct.toFixed(2)}%。`,
+      `最新一日日K：${formatCnDate(latest.ts)}: 开${formatPriceYuan(latest.open)} 高${formatPriceYuan(latest.high)} 低${formatPriceYuan(latest.low)} 收${formatPriceYuan(latest.close)} 量${Math.round(latest.volume)}手，相对前收变化=${latestVsPrevClosePct.toFixed(2)}%，实体=${latestBodyPct.toFixed(2)}%，振幅=${latestRangePct.toFixed(2)}%，上影=${latestUpperShadowPct.toFixed(2)}%，下影=${latestLowerShadowPct.toFixed(2)}%，收盘位于当日区间=${latestClosePositionPct.toFixed(2)}%。`,
+      `区间统计：区间涨跌幅=${windowChangePct.toFixed(2)}%，相对区间高点回撤=${drawdownPct.toFixed(2)}%，区间低点=${formatPriceYuan(lowestLow)}，近${lookbackDays}日上涨天数=${positiveDays}/${Math.max(1, lookbackDays - 1)}。`,
       `均线与量能：收盘相对MA5=${latestCloseVsMa5Pct.toFixed(2)}%，收盘相对MA10=${latestCloseVsMa10Pct.toFixed(2)}%，MA5斜率=${ma5SlopePct.toFixed(2)}%，最新量能相对近5日均量=${latestVolumeVsAvg5Pct.toFixed(2)}%。`,
-      `关键价位：短线支撑参考=${supportRef.toFixed(2)}，短线压力参考=${resistanceRef.toFixed(2)}。`,
+      `关键价位：短线支撑参考=${formatPriceYuan(supportRef)}，短线压力参考=${formatPriceYuan(resistanceRef)}。`,
       '如果前段趋势仍完整、前一交易日只是强势整理或缩量回踩、最新一日能重新站回关键均线并守住支撑，可判断为主力还在；如果前一交易日已经明显转弱、破位或放量走坏，且最新一日不能修复结构，则判断为主力转弱或主力离场。',
       '输出格式固定为7行：',
       '1. 结论：主力还在/主力转弱/主力离场',
@@ -1149,7 +1160,7 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     return
   }
 
-  const cachePath = cacheFilePath(`mx_intraday_v3_${code}.json`)
+  const cachePath = cacheFilePath(`mx_intraday_v4_${code}.json`)
   const cached = await readJsonCache<{
     symbol: string
     analysisDate: string
@@ -1206,7 +1217,7 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
         const low = Math.min(...chunk.map((row) => row.low))
         const volumeAvg = avg(chunk.map((row) => row.volume))
         parts.push(
-          `${hhmm(first.ts)}-${hhmm(last.ts)} C${first.close.toFixed(2)}->${last.close.toFixed(2)} H${high.toFixed(2)} L${low.toFixed(2)} V均${Math.round(volumeAvg)}`,
+          `${hhmm(first.ts)}-${hhmm(last.ts)} 收${formatPriceYuan(first.close)}->${formatPriceYuan(last.close)} 高${formatPriceYuan(high)} 低${formatPriceYuan(low)} 均量${Math.round(volumeAvg)}手`,
         )
       }
       return parts.join('; ')
@@ -1265,21 +1276,22 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
     const afternoonTrendSummary = summarizeSegments(afternoonBars, 4)
     const tailTrendSummary = summarizeSegments(last30Bars, 5)
     const keyMoments = [
-      `开盘首分钟 ${hhmm(openBar.ts)} O${openBar.open.toFixed(2)} C${openBar.close.toFixed(2)} L${openBar.low.toFixed(2)} V${Math.round(openBar.volume)}`,
-      `上午高点 ${hhmm(morningHighBar.ts)} H${morningHighBar.high.toFixed(2)} C${morningHighBar.close.toFixed(2)} A${(morningHighBar.avgPrice ?? morningHighBar.close).toFixed(2)} V${Math.round(morningHighBar.volume)}`,
-      `全天最大量 ${hhmm(maxVolBar.ts)} C${maxVolBar.close.toFixed(2)} V${Math.round(maxVolBar.volume)}`,
+      `开盘首分钟 ${hhmm(openBar.ts)} 开${formatPriceYuan(openBar.open)} 收${formatPriceYuan(openBar.close)} 低${formatPriceYuan(openBar.low)} 量${Math.round(openBar.volume)}手`,
+      `上午高点 ${hhmm(morningHighBar.ts)} 高${formatPriceYuan(morningHighBar.high)} 收${formatPriceYuan(morningHighBar.close)} 均价${formatPriceYuan(morningHighBar.avgPrice ?? morningHighBar.close)} 量${Math.round(morningHighBar.volume)}手`,
+      `全天最大量 ${hhmm(maxVolBar.ts)} 收${formatPriceYuan(maxVolBar.close)} 量${Math.round(maxVolBar.volume)}手`,
       maxVolAfterTwoBar
-        ? `14点后最大量 ${hhmm(maxVolAfterTwoBar.ts)} C${maxVolAfterTwoBar.close.toFixed(2)} V${Math.round(maxVolAfterTwoBar.volume)}`
+        ? `14点后最大量 ${hhmm(maxVolAfterTwoBar.ts)} 收${formatPriceYuan(maxVolAfterTwoBar.close)} 量${Math.round(maxVolAfterTwoBar.volume)}手`
         : '14点后最大量 无',
-      `收盘分钟 ${hhmm(lastBar.ts)} C${lastBar.close.toFixed(2)} A${(lastBar.avgPrice ?? lastBar.close).toFixed(2)} V${Math.round(lastBar.volume)}`,
+      `收盘分钟 ${hhmm(lastBar.ts)} 收${formatPriceYuan(lastBar.close)} 均价${formatPriceYuan(lastBar.avgPrice ?? lastBar.close)} 量${Math.round(lastBar.volume)}手`,
     ].join('; ')
 
     const prompt = [
-      `请只分析 A 股 ${code} ${name} 在 ${analysisDate} 这个交易日的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
+      `请只分析 A 股 ${code} ${name} 在 ${formatCnDate(analysisDate)} 这个交易日的1分钟分时图，不要掺入消息面、财务面和主观臆测。`,
       `本次分析定位：${analysisScopeText}分时分析。你只分析 ${analysisDate} 这一个交易日，不要把别的交易日混进来。`,
+      '输出格式要求：日期一律写成“10月15日”这种中文格式，不要写“10-15”“2026-10-15”；价格一律写成“6.27元”，不要只写数字；成交量写“28272手”。',
       '请像短线复盘一样，先从分时里拆出最重要的3个细节，再合起来定性，最后给下一交易日剧本和风控位。',
-      `开盘到收盘关键统计：开盘=${openBar.open.toFixed(2)}，收盘=${lastBar.close.toFixed(2)}，全天涨跌=${openToClosePct.toFixed(2)}%，全天最高=${dayHighBar.high.toFixed(2)}@${hhmm(dayHighBar.ts)}，全天最低=${dayLowBar.low.toFixed(2)}@${hhmm(dayLowBar.ts)}。`,
-      `冲高回落结构：开盘到高点涨幅=${openToHighPct.toFixed(2)}%，高点回落到收盘=${highToClosePct.toFixed(2)}%，午后首根价格=${noonOpenBar.close.toFixed(2)}，午后到收盘变化=${noonToClosePct.toFixed(2)}%。`,
+      `开盘到收盘关键统计：开盘=${formatPriceYuan(openBar.open)}，收盘=${formatPriceYuan(lastBar.close)}，全天涨跌=${openToClosePct.toFixed(2)}%，全天最高=${formatPriceYuan(dayHighBar.high)}@${hhmm(dayHighBar.ts)}，全天最低=${formatPriceYuan(dayLowBar.low)}@${hhmm(dayLowBar.ts)}。`,
+      `冲高回落结构：开盘到高点涨幅=${openToHighPct.toFixed(2)}%，高点回落到收盘=${highToClosePct.toFixed(2)}%，午后首根价格=${formatPriceYuan(noonOpenBar.close)}，午后到收盘变化=${noonToClosePct.toFixed(2)}%。`,
       `均价线与强弱：收盘相对全天均价=${closeVsAvgPct.toFixed(2)}%，上午在均价线上方分钟占比=${morningAboveAvgPct.toFixed(2)}%，下午在均价线上方分钟占比=${afternoonAboveAvgPct.toFixed(2)}%。`,
       `量能结构：全天最大分钟量=${Math.round(maxVolBar.volume)}@${hhmm(maxVolBar.ts)}，14:00后最大分钟量=${Math.round(maxVolAfterTwoBar?.volume ?? 0)}@${maxVolAfterTwoBar ? hhmm(maxVolAfterTwoBar.ts) : '无'}，上午均量=${Math.round(avgVolumeMorning)}，下午均量=${Math.round(avgVolumeAfternoon)}。`,
       `关键分钟：${keyMoments}。`,
@@ -1301,7 +1313,7 @@ router.get('/:symbol/mx/intraday', async (req: Request, res: Response): Promise<
       return
     }
 
-    const report = `分析交易日：${analysisDate}（${analysisScopeText}）\n${out.preview}`
+    const report = `分析交易日：${formatCnDate(analysisDate)}（${analysisScopeText}）\n${out.preview}`
     const payload = {
       symbol: code,
       analysisDate,
