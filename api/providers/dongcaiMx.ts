@@ -9,6 +9,7 @@
  */
 
 const DEFAULT_AGENT_GW_BASE_URL = 'https://agent-gw.kimi.com/coding'
+const DEFAULT_KIMI_BASE_URL_CODING = 'https://api.kimi.ai/coding/v1'
 const DEFAULT_KIMI_BASE_URL_GLOBAL = 'https://api.moonshot.ai/v1'
 const DEFAULT_KIMI_BASE_URL_CN = 'https://api.moonshot.cn/v1'
 const DEFAULT_KIMI_MODEL = 'kimi-k3'
@@ -40,9 +41,20 @@ function resolveKimiApiKey(): string {
   return String(process.env.KIMI_API_KEY ?? process.env.MOONSHOT_API_KEY ?? '').trim()
 }
 
+function normalizeKimiModel(model: string): string {
+  const normalized = model.trim().replace(/[“”"]/g, '')
+  if (/^kimi[\s_-]*k3$/i.test(normalized)) return 'k3'
+  return normalized || DEFAULT_KIMI_MODEL
+}
+
+function resolveKimiTemperature(model: string, requested?: number): number {
+  if (model.startsWith('k3') || model.includes('for-coding')) return 1
+  return requested ?? 0.2
+}
+
 function resolveKimiModel(): string {
-  return (
-    String(process.env.KIMI_MODEL ?? process.env.MOONSHOT_MODEL ?? DEFAULT_KIMI_MODEL).trim() || DEFAULT_KIMI_MODEL
+  return normalizeKimiModel(
+    String(process.env.KIMI_MODEL ?? process.env.MODEL_NAME ?? process.env.MOONSHOT_MODEL ?? DEFAULT_KIMI_MODEL),
   )
 }
 
@@ -54,7 +66,7 @@ function resolveKimiBaseUrls(): string[] {
     .map((x) => String(x).trim().replace(/\/$/, ''))
     .filter(Boolean)
 
-  return [...new Set([...configured, DEFAULT_KIMI_BASE_URL_GLOBAL, DEFAULT_KIMI_BASE_URL_CN])]
+  return [...new Set([...configured, DEFAULT_KIMI_BASE_URL_CODING, DEFAULT_KIMI_BASE_URL_GLOBAL, DEFAULT_KIMI_BASE_URL_CN])]
 }
 
 function extractAssistantText(payload: ChatCompletionResponse): string {
@@ -95,6 +107,7 @@ async function postAgentTool(token: string, body: unknown, timeoutMs: number): P
 async function postKimiChat(input: {
   apiKey: string
   baseUrl: string
+  model: string
   system: string
   user: string
   timeoutMs: number
@@ -110,8 +123,8 @@ async function postKimiChat(input: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: resolveKimiModel(),
-        temperature: input.temperature ?? 0.2,
+        model: input.model,
+        temperature: resolveKimiTemperature(input.model, input.temperature),
         messages: [
           { role: 'system', content: input.system },
           { role: 'user', content: input.user },
@@ -187,19 +200,22 @@ async function callWithRegularKimi(
   const apiKey = resolveKimiApiKey()
   if (!apiKey) return null
   const prompt = buildRegularChatPrompt(apiName, params)
+  const model = resolveKimiModel()
   for (const baseUrl of resolveKimiBaseUrls()) {
     try {
       const out = await postKimiChat({
         apiKey,
         baseUrl,
+        model,
         system: prompt.system,
         user: prompt.user,
         timeoutMs,
         temperature: prompt.temperature,
       })
       if (out?.preview) return { is_success: 'true', data_preview: out.preview }
-    } catch {
-      // try next base url
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      console.warn(`[Kimi] chat failed baseUrl=${baseUrl} model=${model}: ${detail}`)
     }
   }
   return null
