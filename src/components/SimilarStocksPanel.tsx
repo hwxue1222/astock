@@ -27,6 +27,8 @@ export default function SimilarStocksPanel(props: {
   const navigate = useNavigate()
   const standards = useStockStore((s) => s.similarStandards)
   const setStandard = useStockStore((s) => s.setSimilarStandard)
+  const standardSymbol = useStockStore((s) => s.standardSymbol)
+  const setStandardSymbol = useStockStore((s) => s.setStandardSymbol)
   const addToWatchlist = useStockStore((s) => s.addToWatchlist)
   const watchlist = useStockStore((s) => s.watchlist)
   const similarAnchorDate = useStockStore((s) => s.similarAnchorDate)
@@ -36,7 +38,7 @@ export default function SimilarStocksPanel(props: {
 
   const watchlistSet = useMemo(() => new Set(watchlist.map((x) => String(x).toUpperCase())), [watchlist])
 
-  const [standardDraft, setStandardDraft] = useState<string>('')
+  const [standardDraft, setStandardDraft] = useState<string>(standardSymbol ?? '')
 
   const standardDraftCode = String(standardDraft ?? '').match(/(\d{6})/)?.[1] ?? ''
   const compareSymbol = standards.s2.enabled && standardDraftCode ? standardDraftCode : props.targetSymbol
@@ -110,6 +112,10 @@ export default function SimilarStocksPanel(props: {
       })
     return () => ac.abort()
   }, [request, setSimilarLast])
+
+  useEffect(() => {
+    setStandardDraft(standardSymbol ?? '')
+  }, [standardSymbol])
 
   useEffect(() => {
     const list = data?.top ?? []
@@ -219,7 +225,13 @@ export default function SimilarStocksPanel(props: {
           <div className="text-xs text-slate-400">对比股票</div>
           <input
             value={standardDraft}
-            onChange={(e) => setStandardDraft(e.target.value.toUpperCase())}
+            onChange={(e) => {
+              const next = e.target.value.toUpperCase().replace(/[^\d]/g, '').slice(0, 6)
+              setStandardDraft(next)
+              if (/^\d{6}$/.test(next) && next !== standardSymbol) {
+                setStandardSymbol(next)
+              }
+            }}
             placeholder="输入6位股票代码"
             className="w-40 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-200"
           />
